@@ -1,0 +1,24 @@
+version: "1"
+services:
+  - name: redkom-iss-api
+    type: web
+    # Путь к папке с бэкендом относительно корня репозитория
+    root: ./backend
+    # Команда для сборки и запуска
+    build:
+      type: dockerfile
+      dockerfile: Dockerfile
+    # Порт, который слушает приложение
+    ports:
+      - port: 8000
+    # Переменные окружения
+    env:
+      - name: DATABASE_URL
+        value: "postgresql+psycopg://redkom:redkom@localhost:5432/redkom_iss" # Это будет переопределено Runko
+      - name: SECRET_KEY
+        value: "change-me-in-production"
+      - name: COOKIE_SECURE
+        value: "true"
+    # Ресурсы (для бесплатного тарифа)
+    instance:
+      type: free
