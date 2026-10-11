@@ -6,7 +6,8 @@ export interface OperatorPeriod {
   calls_outgoing: number;
   chats_bitrix: number;
   chats_mobile: number;
-  calls_handled: number; // computed на бэке
+  callback_calls: number;
+  calls_handled: number;
   has_critical_errors: boolean;
   critical_errors_reason: string | null;
   override_tone: number | null;
@@ -26,6 +27,7 @@ export interface OperatorPeriodIn {
   calls_outgoing: number;
   chats_bitrix: number;
   chats_mobile: number;
+  callback_calls: number;
   has_critical_errors: boolean;
   critical_errors_reason: string | null;
   override_tone: number | null;

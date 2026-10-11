@@ -105,6 +105,10 @@ class OperatorPeriod(Base):
     chats_bitrix: Mapped[int] = mapped_column(Integer, default=0)
     chats_mobile: Mapped[int] = mapped_column(Integer, default=0)
 
+    # Заказные (обратные) звонки из мобильного приложения. В рейтинг не входят,
+    # отображаются отдельно. Импортируются из файла «звонки_<месяц>.xlsx».
+    callback_calls: Mapped[int] = mapped_column(Integer, default=0)
+
     has_critical_errors: Mapped[bool] = mapped_column(Boolean, default=False)
     critical_errors_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
@@ -144,3 +148,4 @@ class SupervisorPeriod(Base):
     norm_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     supervisor: Mapped[User] = relationship()
+

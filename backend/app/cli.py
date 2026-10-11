@@ -9,6 +9,7 @@ from sqlalchemy import select, text
 from .db import SessionLocal
 from .exporters.iss_xlsx import export_iss_xlsx
 from .importers.iss_xlsx import import_iss_xlsx
+from .importers.callbacks_xlsx import import_callbacks_xlsx
 from .importers.premiums_xlsx import import_premiums_xlsx
 from .models import Operator, Period, User, UserRole
 from .security import hash_password
@@ -227,6 +228,37 @@ def cmd_import_premiums_xlsx(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_import_callbacks_xlsx(args: argparse.Namespace) -> int:
+    db = SessionLocal()
+    try:
+        report = import_callbacks_xlsx(
+            path=Path(args.path),
+            db=db,
+            year=args.year,
+            month=args.month,
+        )
+    except Exception as e:
+        print(f"Import failed: {e}", file=sys.stderr)
+        return 2
+    finally:
+        db.close()
+
+    print(f"Period: {args.year}-{args.month:02d} (id={report.period_id})")
+    print(f"Rows in file: {report.rows_total}")
+    print(f"Matched:      {len(report.matched)}")
+    for db_name, file_name, count in report.matched:
+        print(f"  {db_name}  <-  {file_name}: {count}")
+    if report.created:
+        print(f"OperatorPeriod created: {report.created}")
+    if report.updated:
+        print(f"OperatorPeriod updated: {report.updated}")
+    if report.not_matched:
+        print(f"Not matched: {len(report.not_matched)}")
+        for name, count in report.not_matched:
+            print(f"  {name}: {count}")
+    return 0
+
+
 def cmd_delete_period(args: argparse.Namespace) -> int:
     db = SessionLocal()
     try:
@@ -310,7 +342,16 @@ def main() -> int:
     p.add_argument("--month", type=int, required=True)
     p.set_defaults(func=cmd_import_premiums_xlsx)
 
-    p = sub.add_parser("delete-period")
+    p = sub.add_parser(
+        "import-callbacks-xlsx",
+        help="Загрузить заказные (обратные) звонки из xlsx",
+    )
+    p.add_argument("path")
+    p.add_argument("--year", type=int, required=True)
+    p.add_argument("--month", type=int, required=True)
+    p.set_defaults(func=cmd_import_callbacks_xlsx)
+
+    p = sub.add_parser("delete-period"))
     p.add_argument("--year", type=int, required=True)
     p.add_argument("--month", type=int, required=True)
     p.set_defaults(func=cmd_delete_period)
@@ -326,3 +367,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

@@ -144,6 +144,7 @@ class OperatorPeriodIn(BaseModel):
     calls_outgoing: int = Field(default=0, ge=0)
     chats_bitrix: int = Field(default=0, ge=0)
     chats_mobile: int = Field(default=0, ge=0)
+    callback_calls: int = Field(default=0, ge=0)
     has_critical_errors: bool = False
     critical_errors_reason: str | None = None
     override_tone: Score | None = None
@@ -159,6 +160,7 @@ class OperatorPeriodOut(BaseModel):
     calls_outgoing: int
     chats_bitrix: int
     chats_mobile: int
+    callback_calls: int
     has_critical_errors: bool
     critical_errors_reason: str | None
     override_tone: int | None
@@ -189,3 +191,4 @@ class SupervisorPeriodOut(BaseModel):
     period_id: int
     norm_score: int | None
     supervisor: UserShort
+

@@ -51,6 +51,7 @@ def upsert_operator_period(
     op.calls_outgoing = payload.calls_outgoing
     op.chats_bitrix = payload.chats_bitrix
     op.chats_mobile = payload.chats_mobile
+    op.callback_calls = payload.callback_calls
     op.has_critical_errors = payload.has_critical_errors
     op.critical_errors_reason = payload.critical_errors_reason
     op.override_tone = payload.override_tone
@@ -80,3 +81,4 @@ def delete_operator_period(
         raise HTTPException(404, "Not found")
     db.delete(op)
     db.commit()
+

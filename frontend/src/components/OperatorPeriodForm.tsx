@@ -86,6 +86,7 @@ export default function OperatorPeriodForm({
   const [callsOutgoing, setCallsOutgoing] = useState(initial?.calls_outgoing ?? 0);
   const [chatsBitrix, setChatsBitrix] = useState(initial?.chats_bitrix ?? 0);
   const [chatsMobile, setChatsMobile] = useState(initial?.chats_mobile ?? 0);
+  const [callbackCalls, setCallbackCalls] = useState(initial?.callback_calls ?? 0);
 
   const [hasCritical, setHasCritical] = useState(initial?.has_critical_errors ?? false);
   const [criticalReason, setCriticalReason] = useState(
@@ -111,6 +112,7 @@ export default function OperatorPeriodForm({
       calls_outgoing: callsOutgoing,
       chats_bitrix: chatsBitrix,
       chats_mobile: chatsMobile,
+      callback_calls: callbackCalls,
       has_critical_errors: hasCritical,
       critical_errors_reason: hasCritical ? criticalReason || null : null,
       override_tone: ovTone,
@@ -156,6 +158,7 @@ export default function OperatorPeriodForm({
             <NumField value={callsOutgoing} onChange={setCallsOutgoing} label="Исходящие (звонки)" />
             <NumField value={chatsBitrix} onChange={setChatsBitrix} label="Битрикс (чаты)" />
             <NumField value={chatsMobile} onChange={setChatsMobile} label="Мобилка (чаты)" />
+            <NumField value={callbackCalls} onChange={setCallbackCalls} label="Заказные звонки" />
           </div>
           <div className="text-sm text-slate-600 mt-2">
             Итого: <span className="font-medium text-slate-900">{total}</span>
@@ -226,3 +229,4 @@ export default function OperatorPeriodForm({
     </Modal>
   );
 }
+

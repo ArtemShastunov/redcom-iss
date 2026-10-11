@@ -4,6 +4,7 @@ export interface OperatorScore {
   operator_id: number;
   operator_name: string;
   calls_handled: number;
+  callback_calls: number;
   has_critical_errors: boolean;
   critical_errors_reason: string | null;
   evaluations_count: number;

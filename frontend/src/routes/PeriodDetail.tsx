@@ -25,6 +25,7 @@ import ScoreCell from "../components/ScoreCell";
 import StatusBadge from "../components/StatusBadge";
 import CallsCell from "../components/CallsCell";
 import ImportPremiumsModal from "../components/ImportPremiumsModal";
+import ImportCallbacksModal from "../components/ImportCallbacksModal";
 import OperatorPeriodForm from "../components/OperatorPeriodForm";
 import SupervisorPeriodForm from "../components/SupervisorPeriodForm";
 
@@ -108,6 +109,7 @@ export default function PeriodDetail() {
   const [supError, setSupError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [callbacksOpen, setCallbacksOpen] = useState(false);
 
   if (!period && periods.isLoading) {
     return <div className="text-slate-500">Загрузка…</div>;
@@ -155,12 +157,20 @@ export default function PeriodDetail() {
         </div>
         <div className="flex gap-2 flex-wrap">
           {canManagePeriods && (
-            <button
-              onClick={() => setImportOpen(true)}
-              className="rounded border px-3 py-1.5 text-sm hover:bg-slate-50"
-            >
-              Загрузить премии
-            </button>
+            <>
+              <button
+                onClick={() => setImportOpen(true)}
+                className="rounded border px-3 py-1.5 text-sm hover:bg-slate-50"
+              >
+                Загрузить премии
+              </button>
+              <button
+                onClick={() => setCallbacksOpen(true)}
+                className="rounded border px-3 py-1.5 text-sm hover:bg-slate-50"
+              >
+                Загрузить заказные
+              </button>
+            </>
           )}
           <button
             onClick={handleExport}
@@ -204,6 +214,7 @@ export default function PeriodDetail() {
                   <th className="text-left px-3 py-2 font-medium">Место</th>
                   <th className="text-left px-3 py-2 font-medium">Оператор</th>
                   <th className="text-right px-3 py-2 font-medium">Звонков</th>
+                  <th className="text-right px-3 py-2 font-medium">Заказные</th>
                   <th className="text-right px-3 py-2 font-medium">Оценок</th>
                   <th className="text-center px-3 py-2 font-medium">Тон</th>
                   <th className="text-center px-3 py-2 font-medium">Полнота</th>
@@ -241,6 +252,9 @@ export default function PeriodDetail() {
                         value={op.calls_handled}
                         per={opPeriodFor(op.operator_id)}
                       />
+                    </td>
+                    <td className="px-3 py-2 text-right text-slate-600">
+                      {op.callback_calls > 0 ? op.callback_calls : "—"}
                     </td>
                     <td className="px-3 py-2 text-right text-slate-600">
                       {op.evaluations_count}
@@ -293,7 +307,7 @@ export default function PeriodDetail() {
                 {scoring.data.operators.length === 0 && (
                   <tr>
                     <td
-                      colSpan={canManagePeriods ? 11 : 10}
+                      colSpan={canManagePeriods ? 12 : 11}
                       className="px-3 py-6 text-center text-slate-400"
                     >
                       За этот период данных нет
@@ -401,6 +415,13 @@ export default function PeriodDetail() {
         <ImportPremiumsModal
           periodId={periodId}
           onClose={() => setImportOpen(false)}
+        />
+      )}
+
+      {callbacksOpen && (
+        <ImportCallbacksModal
+          periodId={periodId}
+          onClose={() => setCallbacksOpen(false)}
         />
       )}
     </div>

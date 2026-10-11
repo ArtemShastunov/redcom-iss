@@ -23,6 +23,7 @@ class OperatorScoreOut(BaseModel):
     operator_id: int
     operator_name: str
     calls_handled: int
+    callback_calls: int
     has_critical_errors: bool
     critical_errors_reason: str | None
     evaluations_count: int
@@ -95,9 +96,6 @@ def get_period_scoring(
         evs = by_operator.get(op.id, [])
         op_period = op_periods.get(op.id)
 
-        # Если OperatorPeriod существует — берём его значение как есть
-        # (даже 0: начальник мог сохранить осознанно).
-        # Fallback на число оценок — только если записи нет вообще.
         if op_period is not None:
             calls = op_period.calls_handled
         else:
@@ -145,6 +143,11 @@ def get_period_scoring(
                 operator_id=o.operator_id,
                 operator_name=o.operator_name,
                 calls_handled=o.calls_handled,
+                callback_calls=(
+                    op_periods.get(o.operator_id).callback_calls
+                    if op_periods.get(o.operator_id)
+                    else 0
+                ),
                 has_critical_errors=o.has_critical_errors,
                 critical_errors_reason=o.critical_errors_reason,
                 evaluations_count=o.evaluations_count,
