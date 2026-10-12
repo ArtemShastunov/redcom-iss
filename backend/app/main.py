@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from .api import (
     auth,
@@ -14,6 +15,18 @@ from .api import (
 )
 
 app = FastAPI(title="Redkom ISS", docs_url="/api/docs", openapi_url="/api/openapi.json")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://redcom-iss-frontend.vercel.app",
+        "http://localhost:5173",
+        "http://localhost:4173",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.include_router(auth.router)
 app.include_router(users.router)
