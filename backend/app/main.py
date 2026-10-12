@@ -20,6 +20,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "https://redcom-iss-frontend.vercel.app",
+        "https://redcom-iss-frontend-artemshastunov.vercel.app",
         "http://localhost:5173",
         "http://localhost:4173",
     ],

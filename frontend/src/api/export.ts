@@ -2,7 +2,8 @@ export async function downloadPeriodXlsx(
   periodId: number,
   filename: string,
 ): Promise<void> {
-  const res = await fetch(`/api/periods/${periodId}/export`, {
+  const base = import.meta.env.VITE_API_URL || "";
+  const res = await fetch(`${base}/api/periods/${periodId}/export`, {
     credentials: "include",
   });
   if (!res.ok) {

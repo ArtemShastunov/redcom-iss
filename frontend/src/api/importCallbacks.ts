@@ -22,10 +22,11 @@ export async function uploadCallbacksFile(
   periodId: number,
   file: File,
 ): Promise<CallbacksImportResult> {
+  const base = import.meta.env.VITE_API_URL || "";
   const fd = new FormData();
   fd.append("file", file);
 
-  const res = await fetch(`/api/periods/${periodId}/import-callbacks`, {
+  const res = await fetch(`${base}/api/periods/${periodId}/import-callbacks`, {
     method: "POST",
     credentials: "include",
     body: fd,
