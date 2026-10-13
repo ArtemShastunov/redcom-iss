@@ -11,6 +11,7 @@ Score = Literal[-1, 0, 1]
 
 # ---------- operators ----------
 
+
 class OperatorIn(BaseModel):
     full_name: str = Field(min_length=1, max_length=200)
     premium_name: str | None = Field(default=None, max_length=200)
@@ -33,6 +34,7 @@ class OperatorOut(BaseModel):
 
 # ---------- periods ----------
 
+
 class PeriodIn(BaseModel):
     year: int = Field(ge=2024, le=2100)
     month: int = Field(ge=1, le=12)
@@ -48,6 +50,7 @@ class PeriodOut(BaseModel):
 
 
 # ---------- users ----------
+
 
 class UserShort(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -85,6 +88,7 @@ class PasswordChangeIn(BaseModel):
 
 # ---------- evaluations ----------
 
+
 class EvaluationIn(BaseModel):
     period_id: int
     operator_id: int
@@ -114,6 +118,7 @@ class EvaluationPatch(BaseModel):
     how_should_be: str | None = None
     impact: str | None = None
     comment: str | None = None
+    supervisor_id: int | None = None
 
 
 class EvaluationOut(BaseModel):
@@ -138,6 +143,7 @@ class EvaluationOut(BaseModel):
 
 
 # ---------- operator_periods ----------
+
 
 class OperatorPeriodIn(BaseModel):
     calls_incoming: int = Field(default=0, ge=0)
@@ -182,6 +188,7 @@ class OperatorPeriodOut(BaseModel):
 
 # ---------- supervisor_periods ----------
 
+
 class SupervisorPeriodIn(BaseModel):
     norm_score: Score | None = None
 
@@ -191,4 +198,3 @@ class SupervisorPeriodOut(BaseModel):
     period_id: int
     norm_score: int | None
     supervisor: UserShort
-

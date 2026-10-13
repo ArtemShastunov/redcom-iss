@@ -120,7 +120,20 @@ def patch_evaluation(
         raise HTTPException(403, "Forbidden")
     _ensure_period_open(db, ev.period_id)
 
-    for k, v in payload.model_dump(exclude_unset=True).items():
+    data = payload.model_dump(exclude_unset=True)
+
+    # Смена супервайзера — только head/admin, и только на реального супервайзера.
+    if "supervisor_id" in data and data["supervisor_id"] is not None:
+        if user.role not in (UserRole.HEAD, UserRole.ADMIN):
+            raise HTTPException(
+                403,
+                "Только начальник ИСС или админ может менять супервайзера",
+            )
+        target = db.get(User, data["supervisor_id"])
+        if target is None or target.role != UserRole.SUPERVISOR:
+            raise HTTPException(404, "Супервайзер не найден")
+
+    for k, v in data.items():
         setattr(ev, k, v)
     db.commit()
     ev = _load(db, evaluation_id)

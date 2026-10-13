@@ -7,10 +7,10 @@ interface SupervisorOption {
   full_name: string;
 }
 
-function toLocalInput(iso: string | null | undefined): string {
+function toDateInput(iso: string | null | undefined): string {
   if (!iso) return "";
-  // "2026-09-03T00:00:00" -> "2026-09-03T00:00"
-  return iso.slice(0, 16);
+  // "2026-09-03T00:00:00" -> "2026-09-03"
+  return iso.slice(0, 10);
 }
 
 function ScoreSelect({
@@ -61,7 +61,7 @@ export default function EvaluationForm({
   submitting: boolean;
   error: string | null;
 }) {
-  const [callDate, setCallDate] = useState(toLocalInput(initial?.call_date));
+  const [callDate, setCallDate] = useState(toDateInput(initial?.call_date));
   const [phone, setPhone] = useState(initial?.phone ?? "");
   const [contractNumber, setContractNumber] = useState(initial?.contract_number ?? "");
   const [tone, setTone] = useState(initial?.tone ?? 0);
@@ -82,7 +82,7 @@ export default function EvaluationForm({
       period_id: periodId,
       operator_id: operatorId,
       supervisor_id: supervisorId,
-      call_date: callDate,
+      call_date: callDate.length === 10 ? `${callDate}T00:00:00` : callDate,
       phone,
       contract_number: contractNumber || null,
       tone,
@@ -127,9 +127,9 @@ export default function EvaluationForm({
 
         <div className="grid grid-cols-2 gap-3">
           <label className="block text-sm">
-            <span className="text-slate-600">Дата и время звонка</span>
+            <span className="text-slate-600">Дата звонка</span>
             <input
-              type="datetime-local"
+              type="date"
               required
               value={callDate}
               onChange={(e) => setCallDate(e.target.value)}
