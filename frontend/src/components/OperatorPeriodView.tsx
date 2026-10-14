@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { listEvaluations, type Evaluation } from "../api/evaluations";
+import type { Evaluation } from "../api/evaluations";
 import { downloadMyEvaluations } from "../api/export";
 import { periodLabel } from "../lib/format";
 import Modal from "./Modal";
@@ -29,15 +29,19 @@ function EvalDetailsModal({
   ];
 
   return (
-    <Modal title="Карточка оценки" onClose={onClose} footer={
-      <button
-        type="button"
-        onClick={onClose}
-        className="rounded bg-slate-900 text-white px-3 py-1.5 text-sm hover:bg-slate-800"
-      >
-        Закрыть
-      </button>
-    }>
+    <Modal
+      title="Карточка оценки"
+      onClose={onClose}
+      footer={
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded bg-slate-900 text-white px-3 py-1.5 text-sm hover:bg-slate-800"
+        >
+          Закрыть
+        </button>
+      }
+    >
       <div className="space-y-4">
         <div className="grid grid-cols-2 gap-4 text-sm">
           <div>
@@ -65,15 +69,21 @@ function EvalDetailsModal({
         <div className="grid grid-cols-3 gap-3 text-sm border-t pt-4">
           <div className="text-center">
             <div className="text-slate-500 text-xs mb-1">Тон</div>
-            <div className="text-lg"><ScoreCell value={evaluation.tone} /></div>
+            <div className="text-lg">
+              <ScoreCell value={evaluation.tone} />
+            </div>
           </div>
           <div className="text-center">
             <div className="text-slate-500 text-xs mb-1">Полнота</div>
-            <div className="text-lg"><ScoreCell value={evaluation.completeness} /></div>
+            <div className="text-lg">
+              <ScoreCell value={evaluation.completeness} />
+            </div>
           </div>
           <div className="text-center">
             <div className="text-slate-500 text-xs mb-1">Диалог в 1С</div>
-            <div className="text-lg"><ScoreCell value={evaluation.dialog_1c} /></div>
+            <div className="text-lg">
+              <ScoreCell value={evaluation.dialog_1c} />
+            </div>
           </div>
         </div>
 
@@ -82,7 +92,11 @@ function EvalDetailsModal({
             <div key={label}>
               <div className="text-slate-500 text-xs mb-1">{label}</div>
               <div className="text-sm whitespace-pre-wrap">
-                {value && value.trim() ? value : <span className="text-slate-400">—</span>}
+                {value && value.trim() ? (
+                  value
+                ) : (
+                  <span className="text-slate-400">—</span>
+                )}
               </div>
             </div>
           ))}
@@ -184,9 +198,7 @@ export default function OperatorPeriodView({
       {evals.isLoading && <div className="text-slate-500">Загрузка…</div>}
 
       {byOperator.length === 0 && !evals.isLoading && (
-        <div className="text-slate-500">
-          За этот период оценок пока нет.
-        </div>
+        <div className="text-slate-500">За этот период оценок пока нет.</div>
       )}
 
       {byOperator.map((group) => (
@@ -208,7 +220,9 @@ export default function OperatorPeriodView({
                   <th className="text-center px-3 py-2 font-medium w-20">Полнота</th>
                   <th className="text-center px-3 py-2 font-medium w-16">1С</th>
                   <th className="text-left px-3 py-2 font-medium">Вопрос</th>
-                  <th className="text-left px-3 py-2 font-medium w-40">Супервайзер</th>
+                  <th className="text-left px-3 py-2 font-medium w-40">
+                    Супервайзер
+                  </th>
                 </tr>
               </thead>
               <tbody>
