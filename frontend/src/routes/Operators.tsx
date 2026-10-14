@@ -2,14 +2,19 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createOperator,
+  createOperatorAccount,
   deactivateOperator,
+  deactivateOperatorAccount,
   listOperators,
+  resetOperatorPassword,
   updateOperator,
   type Operator,
+  type OperatorAccountOut,
   type OperatorIn,
 } from "../api/operators";
 import { usePermissions } from "../lib/usePermissions";
 import OperatorForm from "../components/OperatorForm";
+import OperatorAccountModal from "../components/OperatorAccountModal";
 
 type StatusFilter = "all" | "active" | "inactive";
 
@@ -26,6 +31,13 @@ export default function Operators() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Operator | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+
+  const [accModal, setAccModal] = useState<{
+    operator: Operator;
+    mode: "create" | "reset";
+  } | null>(null);
+  const [accError, setAccError] = useState<string | null>(null);
+  const [accResult, setAccResult] = useState<OperatorAccountOut | null>(null);
 
   const createMut = useMutation({
     mutationFn: (payload: OperatorIn) => createOperator(payload),
@@ -67,6 +79,47 @@ export default function Operators() {
 
   const restoreMut = useMutation({
     mutationFn: (id: number) => updateOperator(id, { is_active: true }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["operators"] }),
+  });
+
+  const createAccMut = useMutation({
+    mutationFn: ({
+      operatorId,
+      payload,
+    }: {
+      operatorId: number;
+      payload: { login?: string | null; password: string };
+    }) => createOperatorAccount(operatorId, payload),
+    onSuccess: (data) => {
+      setAccResult(data);
+      setAccError(null);
+      qc.invalidateQueries({ queryKey: ["operators"] });
+    },
+    onError: (e: unknown) => {
+      const status = (e as { status?: number }).status;
+      setAccError(
+        status === 409 ? "У оператора уже есть аккаунт" : "Не удалось создать",
+      );
+    },
+  });
+
+  const resetAccMut = useMutation({
+    mutationFn: ({
+      operatorId,
+      payload,
+    }: {
+      operatorId: number;
+      payload: { login?: string | null; password: string };
+    }) => resetOperatorPassword(operatorId, payload),
+    onSuccess: (data) => {
+      setAccResult(data);
+      setAccError(null);
+    },
+    onError: () => setAccError("Не удалось сменить пароль"),
+  });
+
+  const deactivateAccMut = useMutation({
+    mutationFn: (operatorId: number) => deactivateOperatorAccount(operatorId),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["operators"] }),
   });
 
@@ -118,27 +171,22 @@ export default function Operators() {
             <tr>
               <th className="text-left px-4 py-2 font-medium">ФИО</th>
               <th className="text-left px-4 py-2 font-medium">Имя в файле премий</th>
+              <th className="text-left px-4 py-2 font-medium">Аккаунт</th>
               <th className="text-left px-4 py-2 font-medium w-32">Статус</th>
-              {canManageOperators && <th className="w-40"></th>}
+              {canManageOperators && <th className="w-72"></th>}
             </tr>
           </thead>
           <tbody>
             {operators.isLoading && (
               <tr>
-                <td
-                  colSpan={canManageOperators ? 4 : 3}
-                  className="px-4 py-6 text-center text-slate-400"
-                >
+                <td colSpan={5} className="px-4 py-6 text-center text-slate-400">
                   Загрузка…
                 </td>
               </tr>
             )}
             {!operators.isLoading && filtered.length === 0 && (
               <tr>
-                <td
-                  colSpan={canManageOperators ? 4 : 3}
-                  className="px-4 py-6 text-center text-slate-400"
-                >
+                <td colSpan={5} className="px-4 py-6 text-center text-slate-400">
                   Нет операторов
                 </td>
               </tr>
@@ -149,6 +197,18 @@ export default function Operators() {
                 <td className="px-4 py-2 text-slate-600">
                   {op.premium_name ?? (
                     <span className="text-slate-400 text-xs">не задано</span>
+                  )}
+                </td>
+                <td className="px-4 py-2 text-slate-600">
+                  {op.account_login ? (
+                    <span className="font-mono text-xs">
+                      {op.account_login}
+                      {op.account_active === false && (
+                        <span className="ml-2 text-red-600">(отключён)</span>
+                      )}
+                    </span>
+                  ) : (
+                    <span className="text-slate-400 text-xs">нет</span>
                   )}
                 </td>
                 <td className="px-4 py-2">
@@ -174,6 +234,43 @@ export default function Operators() {
                     >
                       Правка
                     </button>
+                    {op.account_login ? (
+                      <>
+                        <button
+                          onClick={() => {
+                            setAccModal({ operator: op, mode: "reset" });
+                            setAccError(null);
+                            setAccResult(null);
+                          }}
+                          className="text-amber-700 hover:text-amber-900 text-xs ml-3"
+                        >
+                          Сменить пароль
+                        </button>
+                        {op.account_active !== false && (
+                          <button
+                            onClick={() => {
+                              if (confirm(`Отключить аккаунт ${op.account_login}?`)) {
+                                deactivateAccMut.mutate(op.id);
+                              }
+                            }}
+                            className="text-red-600 hover:text-red-800 text-xs ml-3"
+                          >
+                            Отключить
+                          </button>
+                        )}
+                      </>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setAccModal({ operator: op, mode: "create" });
+                          setAccError(null);
+                          setAccResult(null);
+                        }}
+                        className="text-emerald-700 hover:text-emerald-900 text-xs ml-3"
+                      >
+                        Создать аккаунт
+                      </button>
+                    )}
                     {op.is_active ? (
                       <button
                         onClick={() => {
@@ -218,6 +315,34 @@ export default function Operators() {
           }}
           submitting={createMut.isPending || updateMut.isPending}
           error={formError}
+        />
+      )}
+
+      {accModal && (
+        <OperatorAccountModal
+          operator={accModal.operator}
+          mode={accModal.mode}
+          onClose={() => {
+            setAccModal(null);
+            setAccError(null);
+            setAccResult(null);
+          }}
+          onSubmit={(payload) => {
+            if (accModal.mode === "create") {
+              createAccMut.mutate({
+                operatorId: accModal.operator.id,
+                payload,
+              });
+            } else {
+              resetAccMut.mutate({
+                operatorId: accModal.operator.id,
+                payload,
+              });
+            }
+          }}
+          submitting={createAccMut.isPending || resetAccMut.isPending}
+          error={accError}
+          result={accResult}
         />
       )}
     </div>

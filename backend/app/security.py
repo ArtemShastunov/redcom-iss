@@ -31,3 +31,57 @@ def read_session_token(token: str) -> int | None:
         return None
     uid = data.get("uid")
     return uid if isinstance(uid, int) else None
+
+
+# ---------- Транслитерация для логинов ----------
+
+_TRANSLIT_MAP = {
+    "а": "a",
+    "б": "b",
+    "в": "v",
+    "г": "g",
+    "д": "d",
+    "е": "e",
+    "ё": "e",
+    "ж": "zh",
+    "з": "z",
+    "и": "i",
+    "й": "y",
+    "к": "k",
+    "л": "l",
+    "м": "m",
+    "н": "n",
+    "о": "o",
+    "п": "p",
+    "р": "r",
+    "с": "s",
+    "т": "t",
+    "у": "u",
+    "ф": "f",
+    "х": "h",
+    "ц": "ts",
+    "ч": "ch",
+    "ш": "sh",
+    "щ": "sch",
+    "ъ": "",
+    "ы": "y",
+    "ь": "",
+    "э": "e",
+    "ю": "yu",
+    "я": "ya",
+}
+
+
+def make_login_from_full_name(full_name: str) -> str:
+    """'Сафронов Максим' -> 'safronov'. Только латиница, нижний регистр."""
+    if not full_name:
+        return "user"
+    surname = full_name.strip().split()[0].lower()
+    result = []
+    for ch in surname:
+        if ch.isascii() and (ch.isalnum() or ch == "_"):
+            result.append(ch)
+        elif ch in _TRANSLIT_MAP:
+            result.append(_TRANSLIT_MAP[ch])
+    login = "".join(result)
+    return login[:60] or "user"

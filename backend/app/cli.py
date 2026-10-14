@@ -12,12 +12,21 @@ from .importers.iss_xlsx import import_iss_xlsx
 from .importers.callbacks_xlsx import import_callbacks_xlsx
 from .importers.premiums_xlsx import import_premiums_xlsx
 from .models import Operator, Period, User, UserRole
-from .security import hash_password
+from .security import hash_password, make_login_from_full_name
 
 MONTHS_RU = {
-    1: "Январь", 2: "Февраль", 3: "Март", 4: "Апрель",
-    5: "Май", 6: "Июнь", 7: "Июль", 8: "Август",
-    9: "Сентябрь", 10: "Октябрь", 11: "Ноябрь", 12: "Декабрь",
+    1: "Январь",
+    2: "Февраль",
+    3: "Март",
+    4: "Апрель",
+    5: "Май",
+    6: "Июнь",
+    7: "Июль",
+    8: "Август",
+    9: "Сентябрь",
+    10: "Октябрь",
+    11: "Ноябрь",
+    12: "Декабрь",
 }
 
 
@@ -30,6 +39,7 @@ def _parse_fio(s: str) -> tuple[str, str | None]:
 
 # ---------- команды ----------
 
+
 def cmd_create_user(args: argparse.Namespace) -> int:
     db = SessionLocal()
     try:
@@ -41,12 +51,14 @@ def cmd_create_user(args: argparse.Namespace) -> int:
             print("Empty password", file=sys.stderr)
             return 1
         role = UserRole(args.role)
-        db.add(User(
-            login=args.login,
-            password_hash=hash_password(password),
-            full_name=args.full_name,
-            role=role,
-        ))
+        db.add(
+            User(
+                login=args.login,
+                password_hash=hash_password(password),
+                full_name=args.full_name,
+                role=role,
+            )
+        )
         db.commit()
         print(f"Created {role.value} {args.login!r}")
         return 0
@@ -68,6 +80,73 @@ def cmd_change_password(args: argparse.Namespace) -> int:
         user.password_hash = hash_password(password)
         db.commit()
         print(f"Password changed for {args.login!r}")
+        return 0
+    finally:
+        db.close()
+
+
+def cmd_create_operator_accounts(args: argparse.Namespace) -> int:
+    """Массово создаёт аккаунты операторам, у которых их ещё нет."""
+    default_password = args.password or "changeme2026"
+
+    db = SessionLocal()
+    try:
+        operators = list(
+            db.scalars(
+                select(Operator)
+                .where(Operator.is_active.is_(True))
+                .order_by(Operator.id)
+            )
+        )
+
+        created: list[tuple[str, str, str]] = []
+        skipped: list[tuple[str, str]] = []
+
+        for op in operators:
+            existing = db.scalar(
+                select(User).where(
+                    User.operator_id == op.id,
+                    User.role == UserRole.OPERATOR,
+                )
+            )
+            if existing is not None:
+                skipped.append((op.full_name, existing.login))
+                continue
+
+            base_login = make_login_from_full_name(op.full_name)
+            candidate = base_login
+            n = 2
+            while db.scalar(select(User).where(User.login == candidate)):
+                candidate = f"{base_login}_{n}"
+                n += 1
+
+            user = User(
+                login=candidate,
+                password_hash=hash_password(default_password),
+                full_name=op.full_name,
+                role=UserRole.OPERATOR,
+                is_active=True,
+                operator_id=op.id,
+            )
+            db.add(user)
+            created.append((op.full_name, candidate, default_password))
+
+        db.commit()
+
+        print(f"Создано аккаунтов: {len(created)}")
+        if created:
+            print()
+            print(f"{'ФИО':<32}{'Логин':<20}Пароль")
+            print("-" * 72)
+            for full_name, login, pwd in created:
+                print(f"{full_name:<32}{login:<20}{pwd}")
+
+        if skipped:
+            print()
+            print(f"Пропущено (уже есть аккаунт): {len(skipped)}")
+            for full_name, login in skipped:
+                print(f"  {full_name}: {login}")
+
         return 0
     finally:
         db.close()
@@ -270,8 +349,12 @@ def cmd_delete_period(args: argparse.Namespace) -> int:
             return 1
         pid = period.id
         db.execute(text("DELETE FROM evaluations WHERE period_id = :pid"), {"pid": pid})
-        db.execute(text("DELETE FROM operator_periods WHERE period_id = :pid"), {"pid": pid})
-        db.execute(text("DELETE FROM supervisor_periods WHERE period_id = :pid"), {"pid": pid})
+        db.execute(
+            text("DELETE FROM operator_periods WHERE period_id = :pid"), {"pid": pid}
+        )
+        db.execute(
+            text("DELETE FROM supervisor_periods WHERE period_id = :pid"), {"pid": pid}
+        )
         db.execute(text("DELETE FROM periods WHERE id = :pid"), {"pid": pid})
         db.commit()
         print(f"Deleted period {args.year}-{args.month:02d} (id={pid})")
@@ -318,6 +401,17 @@ def main() -> int:
     p.add_argument("--password", default=None)
     p.set_defaults(func=cmd_change_password)
 
+    p = sub.add_parser(
+        "create-operator-accounts",
+        help="Массово создать аккаунты всем активным операторам",
+    )
+    p.add_argument(
+        "--password",
+        default=None,
+        help="Пароль для всех (по умолчанию changeme2026)",
+    )
+    p.set_defaults(func=cmd_create_operator_accounts)
+
     p = sub.add_parser("import-iss-xlsx")
     p.add_argument("path")
     p.add_argument("--year", type=int, required=True)
@@ -342,16 +436,13 @@ def main() -> int:
     p.add_argument("--month", type=int, required=True)
     p.set_defaults(func=cmd_import_premiums_xlsx)
 
-    p = sub.add_parser(
-        "import-callbacks-xlsx",
-        help="Загрузить заказные (обратные) звонки из xlsx",
-    )
+    p = sub.add_parser("import-callbacks-xlsx")
     p.add_argument("path")
     p.add_argument("--year", type=int, required=True)
     p.add_argument("--month", type=int, required=True)
     p.set_defaults(func=cmd_import_callbacks_xlsx)
 
-    p = sub.add_parser("delete-period"))
+    p = sub.add_parser("delete-period")
     p.add_argument("--year", type=int, required=True)
     p.add_argument("--month", type=int, required=True)
     p.set_defaults(func=cmd_delete_period)
@@ -367,4 +458,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

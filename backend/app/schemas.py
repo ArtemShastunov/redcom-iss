@@ -30,6 +30,21 @@ class OperatorOut(BaseModel):
     full_name: str
     premium_name: str | None
     is_active: bool
+    account_id: int | None = None
+    account_login: str | None = None
+    account_active: bool | None = None
+
+
+class OperatorAccountIn(BaseModel):
+    login: str | None = Field(default=None, max_length=64)
+    password: str = Field(min_length=1, max_length=200)
+
+
+class OperatorAccountOut(BaseModel):
+    user_id: int
+    login: str
+    is_active: bool
+    operator_id: int
 
 
 # ---------- periods ----------
