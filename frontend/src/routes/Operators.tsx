@@ -5,6 +5,7 @@ import {
   createOperatorAccount,
   deactivateOperator,
   deactivateOperatorAccount,
+  deleteOperator,
   listOperators,
   resetOperatorPassword,
   updateOperator,
@@ -31,6 +32,7 @@ export default function Operators() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Operator | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const [accModal, setAccModal] = useState<{
     operator: Operator;
@@ -80,6 +82,24 @@ export default function Operators() {
   const restoreMut = useMutation({
     mutationFn: (id: number) => updateOperator(id, { is_active: true }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["operators"] }),
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: (id: number) => deleteOperator(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["operators"] });
+      setDeleteError(null);
+    },
+    onError: (e: unknown) => {
+      // 409 — есть данные, удалить нельзя. Показываем detail из ответа.
+      const status = (e as { status?: number }).status;
+      const detail = (e as { detail?: string }).detail;
+      if (status === 409 && detail) {
+        setDeleteError(String(detail));
+      } else {
+        setDeleteError("Не удалось удалить оператора");
+      }
+    },
   });
 
   const createAccMut = useMutation({
@@ -148,6 +168,18 @@ export default function Operators() {
         )}
       </div>
 
+      {deleteError && (
+        <div className="bg-red-50 border border-red-200 rounded px-4 py-3 text-sm text-red-800 flex justify-between items-start gap-4">
+          <span>{deleteError}</span>
+          <button
+            onClick={() => setDeleteError(null)}
+            className="text-red-600 hover:text-red-900 text-lg leading-none"
+          >
+            ×
+          </button>
+        </div>
+      )}
+
       <div className="flex gap-2 text-sm">
         {(["all", "active", "inactive"] as StatusFilter[]).map((f) => (
           <button
@@ -173,7 +205,7 @@ export default function Operators() {
               <th className="text-left px-4 py-2 font-medium">Имя в файле премий</th>
               <th className="text-left px-4 py-2 font-medium">Аккаунт</th>
               <th className="text-left px-4 py-2 font-medium w-32">Статус</th>
-              {canManageOperators && <th className="w-72"></th>}
+              {canManageOperators && <th className="w-80"></th>}
             </tr>
           </thead>
           <tbody>
@@ -234,6 +266,7 @@ export default function Operators() {
                     >
                       Правка
                     </button>
+
                     {op.account_login ? (
                       <>
                         <button
@@ -271,7 +304,8 @@ export default function Operators() {
                         Создать аккаунт
                       </button>
                     )}
-                    {op.is_active ? (
+
+                    {op.is_active && (
                       <button
                         onClick={() => {
                           if (confirm(`Деактивировать «${op.full_name}»?`)) {
@@ -282,7 +316,8 @@ export default function Operators() {
                       >
                         Деактивировать
                       </button>
-                    ) : (
+                    )}
+                    {!op.is_active && (
                       <button
                         onClick={() => restoreMut.mutate(op.id)}
                         className="text-emerald-700 hover:text-emerald-900 text-xs ml-3"
@@ -290,6 +325,24 @@ export default function Operators() {
                         Восстановить
                       </button>
                     )}
+
+                    <button
+                      onClick={() => {
+                        if (
+                          confirm(
+                            `УДАЛИТЬ оператора «${op.full_name}» насовсем?\n\n` +
+                              `Это возможно только если у него НЕТ ни одной оценки ` +
+                              `и ни одной записи по периодам. Если данные есть — ` +
+                              `система откажет, и надо будет использовать «Деактивировать».`,
+                          )
+                        ) {
+                          deleteMut.mutate(op.id);
+                        }
+                      }}
+                      className="text-red-700 hover:text-red-900 text-xs ml-3 font-medium"
+                    >
+                      Удалить
+                    </button>
                   </td>
                 )}
               </tr>

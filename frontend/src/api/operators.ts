@@ -63,6 +63,14 @@ export function deactivateOperator(id: number): Promise<Operator> {
   return apiFetch<Operator>(`/api/operators/${id}`, { method: "DELETE" });
 }
 
+/**
+ * Полное удаление оператора. Работает только если у оператора нет
+ * ни одной оценки и ни одной записи по периодам. Иначе вернёт 409.
+ */
+export function deleteOperator(id: number): Promise<void> {
+  return apiFetch<void>(`/api/operators/${id}/delete`, { method: "POST" });
+}
+
 export function createOperatorAccount(
   operatorId: number,
   payload: OperatorAccountIn,

@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..deps import get_db, get_current_user, require_role
-from ..models import Operator, User, UserRole
+from ..models import Evaluation, Operator, OperatorPeriod, User, UserRole
 from ..schemas import (
     OperatorAccountIn,
     OperatorAccountOut,
@@ -103,6 +103,10 @@ def deactivate_operator(
     db: Session = Depends(get_db),
     _: User = Depends(admin_head),
 ) -> OperatorOut:
+    """Мягкое удаление: оператор остаётся в БД, но помечается неактивным.
+
+    Используй, если у оператора есть история оценок, которую надо сохранить.
+    """
     op = db.get(Operator, operator_id)
     if op is None:
         raise HTTPException(404, "Operator not found")
@@ -110,6 +114,66 @@ def deactivate_operator(
     db.commit()
     db.refresh(op)
     return _to_out(db, op)
+
+
+@router.post("/{operator_id}/delete", status_code=204)
+def delete_operator(
+    operator_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(admin_head),
+) -> None:
+    """Жёсткое удаление оператора.
+
+    Разрешено ТОЛЬКО если у оператора нет никаких данных:
+    ни оценок, ни записей operator_periods. Если данные есть — 409,
+    надо сначала деактивировать (история сохранится).
+    """
+    op = db.get(Operator, operator_id)
+    if op is None:
+        raise HTTPException(404, "Operator not found")
+
+    evals_count = (
+        db.scalar(
+            select(func.count(Evaluation.id)).where(Evaluation.operator_id == op.id)
+        )
+        or 0
+    )
+    if evals_count > 0:
+        raise HTTPException(
+            409,
+            f"Нельзя удалить: у оператора {evals_count} оценок. "
+            "Используйте «Деактивировать», чтобы сохранить историю.",
+        )
+
+    op_periods_count = (
+        db.scalar(
+            select(func.count())
+            .select_from(OperatorPeriod)
+            .where(OperatorPeriod.operator_id == op.id)
+        )
+        or 0
+    )
+    if op_periods_count > 0:
+        raise HTTPException(
+            409,
+            "Нельзя удалить: у оператора есть данные по периодам "
+            "(calls_handled / override / критические ошибки). "
+            "Используйте «Деактивировать».",
+        )
+
+    # Удаляем связанный аккаунт, если есть
+    user = db.scalar(
+        select(User).where(
+            User.operator_id == op.id,
+            User.role == UserRole.OPERATOR,
+        )
+    )
+    if user is not None:
+        db.delete(user)
+        db.flush()
+
+    db.delete(op)
+    db.commit()
 
 
 # ---------- Аккаунт оператора ----------
