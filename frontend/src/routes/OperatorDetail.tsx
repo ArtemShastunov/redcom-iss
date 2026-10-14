@@ -14,6 +14,7 @@ import { listPeriods, type Period } from "../api/periods";
 import { fetchPeriodScoring } from "../api/scoring";
 import { useMe } from "../lib/useMe";
 import { periodLabel } from "../lib/format";
+import EvaluationDetailsModal from "../components/EvaluationDetailsModal";
 import ScoreCell from "../components/ScoreCell";
 import StatusBadge from "../components/StatusBadge";
 import EvaluationForm from "../components/EvaluationForm";
@@ -59,10 +60,12 @@ export default function OperatorDetail() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Evaluation | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Evaluation | null>(null);
 
   const isClosed = period?.status === "closed";
   const role = me.data?.role;
-  const canCreate = (role === "supervisor" || role === "head" || role === "admin") && !isClosed;
+  const canCreate =
+    (role === "supervisor" || role === "head" || role === "admin") && !isClosed;
 
   function canEdit(ev: Evaluation): boolean {
     if (isClosed) return false;
@@ -107,9 +110,9 @@ export default function OperatorDetail() {
     },
   });
 
-  // группировка оценок по супервайзеру, порядок — как в supervisors[]
   const grouped = useMemo(() => {
-    if (!evals.data) return [] as { supervisor: Evaluation["supervisor"]; items: Evaluation[] }[];
+    if (!evals.data)
+      return [] as { supervisor: Evaluation["supervisor"]; items: Evaluation[] }[];
     const bySup = new Map<number, Evaluation[]>();
     for (const ev of evals.data) {
       const arr = bySup.get(ev.supervisor.id) ?? [];
@@ -129,7 +132,8 @@ export default function OperatorDetail() {
   );
 
   if (!period) return <div className="text-slate-500">Загрузка…</div>;
-  if (!operator.data) return <div className="text-slate-500">Загрузка оператора…</div>;
+  if (!operator.data)
+    return <div className="text-slate-500">Загрузка оператора…</div>;
 
   return (
     <div className="space-y-4">
@@ -189,6 +193,10 @@ export default function OperatorDetail() {
         </div>
       )}
 
+      <div className="text-xs text-slate-500">
+        Клик по строке — откроется полная карточка оценки.
+      </div>
+
       {evals.isLoading && <div className="text-slate-500">Загрузка оценок…</div>}
 
       {grouped.map(({ supervisor, items }) => (
@@ -205,15 +213,21 @@ export default function OperatorDetail() {
                   <th className="text-left px-3 py-2 font-medium w-28">Телефон</th>
                   <th className="text-left px-3 py-2 font-medium w-28">Договор</th>
                   <th className="text-center px-3 py-2 font-medium w-16">Тон</th>
-                  <th className="text-center px-3 py-2 font-medium w-20">Полнота</th>
+                  <th className="text-center px-3 py-2 font-medium w-20">
+                    Полнота
+                  </th>
                   <th className="text-center px-3 py-2 font-medium w-16">1С</th>
                   <th className="text-left px-3 py-2 font-medium">Вопрос</th>
-                  <th className="w-24"></th>
+                  <th className="w-28"></th>
                 </tr>
               </thead>
               <tbody>
                 {items.map((ev) => (
-                  <tr key={ev.id} className="border-t align-top">
+                  <tr
+                    key={ev.id}
+                    onClick={() => setSelected(ev)}
+                    className="border-t align-top cursor-pointer hover:bg-slate-50"
+                  >
                     <td className="px-3 py-2 text-slate-600 whitespace-nowrap">
                       {fmtDateTime(ev.call_date)}
                     </td>
@@ -233,14 +247,17 @@ export default function OperatorDetail() {
                     <td className="px-3 py-2 text-slate-700">
                       {ev.question ?? "—"}
                       {ev.comment && (
-                        <div className="text-xs text-slate-500 mt-1">{ev.comment}</div>
+                        <div className="text-xs text-slate-500 mt-1">
+                          {ev.comment}
+                        </div>
                       )}
                     </td>
                     <td className="px-3 py-2 text-right whitespace-nowrap">
                       {canEdit(ev) && (
                         <>
                           <button
-                            onClick={() => {
+                            onClick={(e) => {
+                              e.stopPropagation();
                               setEditing(ev);
                               setFormError(null);
                               setFormOpen(true);
@@ -250,8 +267,11 @@ export default function OperatorDetail() {
                             Правка
                           </button>
                           <button
-                            onClick={() => {
-                              if (confirm("Удалить оценку?")) deleteMut.mutate(ev.id);
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (confirm("Удалить оценку?")) {
+                                deleteMut.mutate(ev.id);
+                              }
                             }}
                             className="text-red-600 hover:text-red-800 text-xs ml-2"
                           >
@@ -264,7 +284,10 @@ export default function OperatorDetail() {
                 ))}
                 {items.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="px-3 py-4 text-center text-slate-400">
+                    <td
+                      colSpan={8}
+                      className="px-3 py-4 text-center text-slate-400"
+                    >
                       Нет оценок
                     </td>
                   </tr>
@@ -304,6 +327,14 @@ export default function OperatorDetail() {
           }}
           submitting={createMut.isPending || updateMut.isPending}
           error={formError}
+        />
+      )}
+
+      {selected && (
+        <EvaluationDetailsModal
+          evaluation={selected}
+          onClose={() => setSelected(null)}
+          showOperator={false}
         />
       )}
     </div>
