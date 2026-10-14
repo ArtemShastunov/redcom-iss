@@ -4,8 +4,14 @@ import enum
 from datetime import datetime
 
 from sqlalchemy import (
-    Boolean, DateTime, ForeignKey, Integer, String, Text,
-    UniqueConstraint, func,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -16,6 +22,7 @@ class UserRole(str, enum.Enum):
     SUPERVISOR = "supervisor"
     HEAD = "head"
     ADMIN = "admin"
+    OPERATOR = "operator"
 
 
 class PeriodStatus(str, enum.Enum):
@@ -32,7 +39,31 @@ class User(Base):
     full_name: Mapped[str] = mapped_column(String(200))
     role: Mapped[UserRole] = mapped_column(String(20))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    # Ссылка на оператора. Заполнена только для роли OPERATOR.
+    # Если оператора деактивируют или удалят — аккаунт отвяжется (SET NULL),
+    # но сам пользователь останется.
+    operator_id: Mapped[int | None] = mapped_column(
+        ForeignKey("operators.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    operator: Mapped[Operator | None] = relationship()
+
+
+class LoginAttempt(Base):
+    __tablename__ = "login_attempts"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    ip: Mapped[str] = mapped_column(String(64), index=True)
+    login: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    attempted_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), index=True
+    )
+    success: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
 class Operator(Base):
@@ -40,8 +71,6 @@ class Operator(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     full_name: Mapped[str] = mapped_column(String(200), unique=True)
-    # Имя в том виде, как оно приходит в файле премий («Мещеряков Д.Н.»).
-    # Нужно для матчинга при импорте, заполняется один раз.
     premium_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
@@ -62,7 +91,9 @@ class Evaluation(Base):
     __tablename__ = "evaluations"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    period_id: Mapped[int] = mapped_column(ForeignKey("periods.id", ondelete="CASCADE"), index=True)
+    period_id: Mapped[int] = mapped_column(
+        ForeignKey("periods.id", ondelete="CASCADE"), index=True
+    )
     operator_id: Mapped[int] = mapped_column(ForeignKey("operators.id"), index=True)
     supervisor_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
 
@@ -99,21 +130,16 @@ class OperatorPeriod(Base):
         ForeignKey("operators.id"), primary_key=True
     )
 
-    # Данные из файла премий (Fastcom/1С). Раз в месяц, по каждому оператору.
     calls_incoming: Mapped[int] = mapped_column(Integer, default=0)
     calls_outgoing: Mapped[int] = mapped_column(Integer, default=0)
     chats_bitrix: Mapped[int] = mapped_column(Integer, default=0)
     chats_mobile: Mapped[int] = mapped_column(Integer, default=0)
 
-    # Заказные (обратные) звонки из мобильного приложения. В рейтинг не входят,
-    # отображаются отдельно. Импортируются из файла «звонки_<месяц>.xlsx».
     callback_calls: Mapped[int] = mapped_column(Integer, default=0)
 
     has_critical_errors: Mapped[bool] = mapped_column(Boolean, default=False)
     critical_errors_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    # Ручные правки начальника поверх авторасчёта.
-    # Если поле не NULL — берётся оно, а не результат derive_*.
     override_tone: Mapped[int | None] = mapped_column(Integer, nullable=True)
     override_completeness: Mapped[int | None] = mapped_column(Integer, nullable=True)
     override_dialog: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -123,11 +149,6 @@ class OperatorPeriod(Base):
 
     @property
     def calls_handled(self) -> int:
-        """Суммарное число обработанных обращений за период.
-
-        Не хранится в БД — вычисляется из четырёх полей. Раньше это была
-        колонка, теперь — производная, чтобы не было расхождений.
-        """
         return (
             (self.calls_incoming or 0)
             + (self.calls_outgoing or 0)
@@ -142,10 +163,7 @@ class SupervisorPeriod(Base):
     period_id: Mapped[int] = mapped_column(
         ForeignKey("periods.id", ondelete="CASCADE"), primary_key=True
     )
-    supervisor_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id"), primary_key=True
-    )
+    supervisor_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
     norm_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     supervisor: Mapped[User] = relationship()
-

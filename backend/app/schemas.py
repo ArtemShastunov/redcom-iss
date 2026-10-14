@@ -66,6 +66,7 @@ class UserOut(BaseModel):
     full_name: str
     role: UserRole
     is_active: bool
+    operator_id: int | None
     created_at: datetime
 
 
@@ -74,6 +75,7 @@ class UserIn(BaseModel):
     password: str = Field(min_length=1, max_length=200)
     full_name: str = Field(min_length=1, max_length=200)
     role: UserRole
+    operator_id: int | None = None
 
 
 class UserPatch(BaseModel):
