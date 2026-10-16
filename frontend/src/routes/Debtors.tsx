@@ -8,6 +8,7 @@ import {
   uploadDebtorFiles,
   type DebtorImportResult,
 } from "../api/debtor";
+import { formatApiError } from "../api/client";
 import { usePermissions } from "../lib/usePermissions";
 import { monthName } from "../lib/format";
 import Modal from "../components/Modal";
@@ -51,11 +52,12 @@ export default function Debtors() {
     },
     onError: (e: unknown) => {
       const status = (e as { status?: number }).status;
-      const detail = (e as { detail?: string }).detail;
       setDeleteError(
         status === 403
           ? "Только начальник ИСС и админ могут удалять периоды"
-          : String(detail ?? "Не удалось удалить период"),
+          : status === 404
+            ? "Период не найден (возможно, уже удалён)"
+            : formatApiError(e, "Не удалось удалить период"),
       );
     },
   });
