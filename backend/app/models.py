@@ -4,15 +4,8 @@ import enum
 from datetime import datetime
 
 from sqlalchemy import (
-    Boolean,
-    DateTime,
-    ForeignKey,
-    Integer,
-    Numeric,
-    String,
-    Text,
-    UniqueConstraint,
-    func,
+    Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text,
+    UniqueConstraint, func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -89,9 +82,7 @@ class Evaluation(Base):
     __tablename__ = "evaluations"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    period_id: Mapped[int] = mapped_column(
-        ForeignKey("periods.id", ondelete="CASCADE"), index=True
-    )
+    period_id: Mapped[int] = mapped_column(ForeignKey("periods.id", ondelete="CASCADE"), index=True)
     operator_id: Mapped[int] = mapped_column(ForeignKey("operators.id"), index=True)
     supervisor_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
 
@@ -161,7 +152,9 @@ class SupervisorPeriod(Base):
     period_id: Mapped[int] = mapped_column(
         ForeignKey("periods.id", ondelete="CASCADE"), primary_key=True
     )
-    supervisor_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    supervisor_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id"), primary_key=True
+    )
     norm_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     supervisor: Mapped[User] = relationship()
@@ -169,9 +162,7 @@ class SupervisorPeriod(Base):
 
 class DebtorPeriod(Base):
     __tablename__ = "debtor_periods"
-    __table_args__ = (
-        UniqueConstraint("year", "month", name="uq_debtor_periods_year_month"),
-    )
+    __table_args__ = (UniqueConstraint("year", "month", name="uq_debtor_periods_year_month"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     year: Mapped[int] = mapped_column(Integer)
@@ -182,17 +173,18 @@ class DebtorPeriod(Base):
 class DebtorRecord(Base):
     __tablename__ = "debtor_records"
     __table_args__ = (
-        UniqueConstraint(
-            "period_id", "operator_id", name="uq_debtor_records_period_operator"
-        ),
+        UniqueConstraint("period_id", "name", name="uq_debtor_records_period_name"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     period_id: Mapped[int] = mapped_column(
         ForeignKey("debtor_periods.id", ondelete="CASCADE"), index=True
     )
-    operator_id: Mapped[int] = mapped_column(ForeignKey("operators.id"), index=True)
+    name: Mapped[str] = mapped_column(String(200))
+    operator_id: Mapped[int | None] = mapped_column(
+        ForeignKey("operators.id"), nullable=True, index=True
+    )
     previous_amount: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
     current_amount: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
 
-    operator: Mapped[Operator] = relationship()
+    operator: Mapped[Operator | None] = relationship()

@@ -1,17 +1,17 @@
-"""Импорт дебиторки из двух файлов:
-  1. «прошлый месяц» — остатки;
-  2. «текущий месяц» — поступления.
+"""Импорт дебиторки из двух файлов (остатки + текущий).
 
-Оба файла — .xlsx. Парсер сам находит шапку в первых строках
-(ищет колонки «Оператор» и «Сумма платежа»/«Сумма»). Если шапки нет —
-использует дефолтное расположение: Сумма в колонке C, ФИО в колонке E.
+Формат файлов может отличаться:
+  * остатки:  A=Сумма платежа, C=«Последний звонивший перед оплатой», E=кол-во
+  * текущий:  A=кол-во, C=Сумма платежа, E=Оператор
 
-Итог — по каждому оператору:
-  Итого   = previous + current
-  5%      = Итого * 0.05
-  На руки = 5% * 0.87 * 1.6
+Парсер сам находит шапку в первых 15 строках и определяет:
+  * колонку суммы — по слову «сумма»;
+  * колонку ФИО — по слову «оператор» ИЛИ «звонивший».
+
+Все ФИО из файла СОХРАНЯЮТСЯ, даже если такого человека нет
+в справочнике operators (Софья, Оля, Храмова и т.д.).
+Для таких записей operator_id = NULL.
 """
-
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -26,12 +26,15 @@ from ..models import DebtorPeriod, DebtorRecord, Operator
 
 FIO_PATTERN = re_compile(r"^[А-ЯЁ][а-яё\-]+\s+[А-ЯЁ]\.[А-ЯЁ]?\.?$")
 
-# Дефолт, если шапку не нашли: Сумма в C, ФИО в E
+# Дефолт, если шапку не нашли: Сумма в C, ФИО в E (как в текущем)
 DEFAULT_AMOUNT_COL = 3
 DEFAULT_OPERATOR_COL = 5
 
-# Максимум строк, среди которых ищем шапку
 HEADER_SEARCH_LIMIT = 15
+
+# Ключевые слова для определения колонок по шапке
+OPERATOR_KEYWORDS = ("оператор", "звонивший", "фио")
+AMOUNT_KEYWORDS = ("сумма",)
 
 
 def _looks_like_fio(value) -> bool:
@@ -53,8 +56,8 @@ def _to_float(value) -> float:
 def _detect_columns(ws) -> tuple[int, int, int]:
     """Возвращает (operator_col, amount_col, first_data_row).
 
-    Ищет шапку в первых HEADER_SEARCH_LIMIT строках. Ищет по всем колонкам
-    слова «оператор» и «сумма».
+    Ищет строку-шапку в первых HEADER_SEARCH_LIMIT строках, где одновременно
+    найдены колонки «ФИО» (оператор / звонивший) и «Сумма».
     """
     operator_col: int | None = None
     amount_col: int | None = None
@@ -64,32 +67,33 @@ def _detect_columns(ws) -> tuple[int, int, int]:
     max_col = min(ws.max_column, 15)
 
     for row_idx in range(1, max_row + 1):
-        row_operator_col: int | None = None
-        row_amount_col: int | None = None
+        row_op: int | None = None
+        row_amt: int | None = None
         for col_idx in range(1, max_col + 1):
             v = ws.cell(row=row_idx, column=col_idx).value
             if v is None or not isinstance(v, str):
                 continue
             v_lower = v.strip().lower()
-            if "оператор" in v_lower:
-                row_operator_col = col_idx
-            if "сумма" in v_lower:
-                row_amount_col = col_idx
-        if row_operator_col is not None and row_amount_col is not None:
-            operator_col = row_operator_col
-            amount_col = row_amount_col
+            if any(kw in v_lower for kw in OPERATOR_KEYWORDS):
+                if row_op is None:
+                    row_op = col_idx
+            if any(kw in v_lower for kw in AMOUNT_KEYWORDS):
+                if row_amt is None:
+                    row_amt = col_idx
+        if row_op is not None and row_amt is not None:
+            operator_col = row_op
+            amount_col = row_amt
             header_row = row_idx
             break
 
     if header_row is not None:
         return operator_col, amount_col, header_row + 1
 
-    # Шапки нет — дефолт
     return DEFAULT_OPERATOR_COL, DEFAULT_AMOUNT_COL, 1
 
 
 def _parse_file(path: Path) -> dict[str, float]:
-    """Читает .xlsx и возвращает {ФИО: сумма}."""
+    """Читает .xlsx, возвращает {ФИО: сумма}."""
     wb = load_workbook(path, data_only=True, read_only=True)
     ws = wb.active
 
@@ -111,10 +115,9 @@ def _parse_file(path: Path) -> dict[str, float]:
 @dataclass
 class DebtorImportReport:
     period_id: int
+    total_rows: int = 0
     matched: int = 0
     unmatched: list[str] = field(default_factory=list)
-    previous_only: list[str] = field(default_factory=list)
-    current_only: list[str] = field(default_factory=list)
 
 
 def import_debtor_xlsx(
@@ -128,9 +131,7 @@ def import_debtor_xlsx(
     current = _parse_file(current_path)
 
     period = db.scalar(
-        select(DebtorPeriod).where(
-            DebtorPeriod.year == year, DebtorPeriod.month == month
-        )
+        select(DebtorPeriod).where(DebtorPeriod.year == year, DebtorPeriod.month == month)
     )
     if period is None:
         period = DebtorPeriod(year=year, month=month)
@@ -153,7 +154,7 @@ def import_debtor_xlsx(
             by_surname.setdefault(surname, []).append(op)
 
     all_fios = set(previous.keys()) | set(current.keys())
-    matched_fios: set[str] = set()
+    report.total_rows = len(all_fios)
 
     for fio in sorted(all_fios):
         op = by_premium.get(fio.strip().lower())
@@ -163,22 +164,19 @@ def import_debtor_xlsx(
             if len(matches) == 1:
                 op = matches[0]
 
-        if op is None:
+        if op is not None:
+            report.matched += 1
+        else:
             report.unmatched.append(fio)
-            continue
 
-        matched_fios.add(fio)
         rec = DebtorRecord(
             period_id=period.id,
-            operator_id=op.id,
+            name=fio,
+            operator_id=op.id if op else None,
             previous_amount=previous.get(fio, 0.0),
             current_amount=current.get(fio, 0.0),
         )
         db.add(rec)
-        report.matched += 1
-
-    report.previous_only = sorted(set(previous.keys()) - matched_fios)
-    report.current_only = sorted(set(current.keys()) - matched_fios)
 
     db.commit()
     return report

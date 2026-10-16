@@ -24,18 +24,9 @@ from ..schemas import (
 router = APIRouter(prefix="/api/debtor", tags=["debtor"])
 
 MONTHS_RU = {
-    1: "Январь",
-    2: "Февраль",
-    3: "Март",
-    4: "Апрель",
-    5: "Май",
-    6: "Июнь",
-    7: "Июль",
-    8: "Август",
-    9: "Сентябрь",
-    10: "Октябрь",
-    11: "Ноябрь",
-    12: "Декабрь",
+    1: "Январь", 2: "Февраль", 3: "Март", 4: "Апрель",
+    5: "Май", 6: "Июнь", 7: "Июль", 8: "Август",
+    9: "Сентябрь", 10: "Октябрь", 11: "Ноябрь", 12: "Декабрь",
 }
 
 XLSX_MEDIA = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -48,9 +39,10 @@ def _compute_row(rec: DebtorRecord) -> DebtorRowOut:
     p5 = total * 0.05
     net = p5 * 0.87 * 1.6
     return DebtorRowOut(
+        name=rec.name,
         operator_id=rec.operator_id,
-        operator_name=rec.operator.full_name,
-        operator_premium_name=rec.operator.premium_name,
+        operator_name=rec.operator.full_name if rec.operator else None,
+        is_operator=rec.operator_id is not None,
         previous_amount=round(prev, 2),
         current_amount=round(curr, 2),
         total=round(total, 2),
@@ -60,14 +52,12 @@ def _compute_row(rec: DebtorRecord) -> DebtorRowOut:
 
 
 def _build_report(db: Session, period: DebtorPeriod) -> DebtorReportOut:
-    records = list(
-        db.scalars(
-            select(DebtorRecord)
-            .options(joinedload(DebtorRecord.operator))
-            .where(DebtorRecord.period_id == period.id)
-            .order_by(DebtorRecord.id)
-        )
-    )
+    records = list(db.scalars(
+        select(DebtorRecord)
+        .options(joinedload(DebtorRecord.operator))
+        .where(DebtorRecord.period_id == period.id)
+        .order_by(DebtorRecord.name)
+    ))
     rows = [_compute_row(r) for r in records]
 
     return DebtorReportOut(
@@ -88,13 +78,9 @@ def list_periods(
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
 ) -> list[DebtorPeriod]:
-    return list(
-        db.scalars(
-            select(DebtorPeriod).order_by(
-                DebtorPeriod.year.desc(), DebtorPeriod.month.desc()
-            )
-        )
-    )
+    return list(db.scalars(
+        select(DebtorPeriod).order_by(DebtorPeriod.year.desc(), DebtorPeriod.month.desc())
+    ))
 
 
 @router.get("/periods/{period_id}", response_model=DebtorReportOut)
@@ -115,10 +101,6 @@ def delete_period(
     db: Session = Depends(get_db),
     _: User = Depends(require_role(UserRole.HEAD, UserRole.ADMIN)),
 ) -> None:
-    """Удалить период дебиторки целиком вместе со всеми записями.
-
-    Доступно только начальнику ИСС и админу.
-    """
     period = db.get(DebtorPeriod, period_id)
     if period is None:
         raise HTTPException(404, "Period not found")
@@ -165,8 +147,8 @@ async def import_debtor(
         month=month,
         matched=report.matched,
         unmatched=report.unmatched,
-        previous_only=report.previous_only,
-        current_only=report.current_only,
+        previous_only=[],
+        current_only=[],
     )
 
 
@@ -187,12 +169,8 @@ def export_period(
     ws.title = "Премия"
 
     headers = [
-        "Оператор",
-        "Остатки",
-        MONTHS_RU.get(period.month, str(period.month)),
-        "Итого",
-        "5%",
-        "На руки",
+        "Оператор", "Остатки", MONTHS_RU.get(period.month, str(period.month)),
+        "Итого", "5%", "На руки",
     ]
     for col, h in enumerate(headers, start=1):
         c = ws.cell(row=1, column=col, value=h)
@@ -200,7 +178,7 @@ def export_period(
         c.fill = PatternFill("solid", fgColor="DDEBF7")
 
     for row_idx, r in enumerate(report.rows, start=2):
-        ws.cell(row=row_idx, column=1, value=r.operator_premium_name or r.operator_name)
+        ws.cell(row=row_idx, column=1, value=r.name)
         ws.cell(row=row_idx, column=2, value=r.previous_amount)
         ws.cell(row=row_idx, column=3, value=r.current_amount)
         ws.cell(row=row_idx, column=4, value=r.total)
@@ -212,9 +190,7 @@ def export_period(
     ws.cell(row=total_row, column=2, value=report.total_previous).font = Font(bold=True)
     ws.cell(row=total_row, column=3, value=report.total_current).font = Font(bold=True)
     ws.cell(row=total_row, column=4, value=report.total_total).font = Font(bold=True)
-    ws.cell(row=total_row, column=5, value=report.total_percent_5).font = Font(
-        bold=True
-    )
+    ws.cell(row=total_row, column=5, value=report.total_percent_5).font = Font(bold=True)
     ws.cell(row=total_row, column=6, value=report.total_net).font = Font(bold=True)
 
     for i, w in enumerate([28, 16, 16, 16, 16, 16], start=1):

@@ -180,9 +180,17 @@ export default function Debtors() {
             </thead>
             <tbody>
               {report.data.rows.map((r) => (
-                <tr key={r.operator_id} className="border-t">
+                <tr key={r.name} className="border-t">
                   <td className="px-3 py-2">
-                    {r.operator_premium_name ?? r.operator_name}
+                    {r.name}
+                    {!r.is_operator && (
+                      <span
+                        className="ml-2 text-xs text-slate-400"
+                        title="Нет в списке операторов"
+                      >
+                        (не оператор)
+                      </span>
+                    )}
                   </td>
                   <td className="px-3 py-2 text-right">
                     {fmtMoney(r.previous_amount)}
@@ -309,13 +317,17 @@ function DebtorImportModal({ onClose }: { onClose: () => void }) {
           {result.unmatched.length > 0 && (
             <div className="bg-amber-50 border border-amber-200 rounded px-3 py-2">
               <div className="font-medium mb-1">
-                Не найдено в системе ({result.unmatched.length}):
+                Не найдено в справочнике операторов ({result.unmatched.length}):
               </div>
               <ul className="list-disc pl-5 text-xs">
                 {result.unmatched.map((n) => (
                   <li key={n}>{n}</li>
                 ))}
               </ul>
+              <div className="text-xs text-amber-800 mt-2">
+                Эти строки всё равно сохранены в отчёте — с пометкой
+                «не оператор».
+              </div>
             </div>
           )}
         </div>
@@ -398,7 +410,7 @@ function DebtorImportModal({ onClose }: { onClose: () => void }) {
 
           <div className="text-xs text-slate-500">
             Файлы <b>.xls</b> нужно пересохранить в <b>.xlsx</b> перед загрузкой.
-            Формат: две колонки — <b>ФИО</b> и <b>Сумма</b>, шапка в первой строке.
+            Парсер сам найдёт колонки «Сумма» и «Оператор / Звонивший».
           </div>
         </div>
       )}

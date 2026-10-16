@@ -11,7 +11,6 @@ Score = Literal[-1, 0, 1]
 
 # ---------- operators ----------
 
-
 class OperatorIn(BaseModel):
     full_name: str = Field(min_length=1, max_length=200)
     premium_name: str | None = Field(default=None, max_length=200)
@@ -49,7 +48,6 @@ class OperatorAccountOut(BaseModel):
 
 # ---------- periods ----------
 
-
 class PeriodIn(BaseModel):
     year: int = Field(ge=2024, le=2100)
     month: int = Field(ge=1, le=12)
@@ -65,7 +63,6 @@ class PeriodOut(BaseModel):
 
 
 # ---------- users ----------
-
 
 class UserShort(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -111,7 +108,6 @@ class ChangeCredentialsIn(BaseModel):
 
 
 # ---------- evaluations ----------
-
 
 class EvaluationIn(BaseModel):
     period_id: int
@@ -168,7 +164,6 @@ class EvaluationOut(BaseModel):
 
 # ---------- operator_periods ----------
 
-
 class OperatorPeriodIn(BaseModel):
     calls_incoming: int = Field(default=0, ge=0)
     calls_outgoing: int = Field(default=0, ge=0)
@@ -212,7 +207,6 @@ class OperatorPeriodOut(BaseModel):
 
 # ---------- supervisor_periods ----------
 
-
 class SupervisorPeriodIn(BaseModel):
     norm_score: Score | None = None
 
@@ -226,7 +220,6 @@ class SupervisorPeriodOut(BaseModel):
 
 # ---------- debtor ----------
 
-
 class DebtorPeriodOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
@@ -236,9 +229,10 @@ class DebtorPeriodOut(BaseModel):
 
 
 class DebtorRowOut(BaseModel):
-    operator_id: int
-    operator_name: str
-    operator_premium_name: str | None
+    name: str
+    operator_id: int | None
+    operator_name: str | None
+    is_operator: bool
     previous_amount: float
     current_amount: float
     total: float
@@ -264,5 +258,5 @@ class DebtorImportResult(BaseModel):
     month: int
     matched: int
     unmatched: list[str]
-    previous_only: list[str]
-    current_only: list[str]
+    previous_only: list[str] = []
+    current_only: list[str] = []

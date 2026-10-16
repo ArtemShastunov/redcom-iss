@@ -8,9 +8,10 @@ export interface DebtorPeriod {
 }
 
 export interface DebtorRow {
-  operator_id: number;
-  operator_name: string;
-  operator_premium_name: string | null;
+  name: string;
+  operator_id: number | null;
+  operator_name: string | null;
+  is_operator: boolean;
   previous_amount: number;
   current_amount: number;
   total: number;
