@@ -2,18 +2,16 @@
   1. «прошлый месяц» — остатки;
   2. «текущий месяц» — поступления.
 
-Оба файла — .xlsx (пересохранить .xls перед загрузкой).
-
-Структура:
-  * «прошлый месяц»: A=Сумма, C=ФИО («Фамилия И.О.»);
-  * «текущий месяц»: внутри детального списка есть заголовки блоков
-    F=Сумма, G=ФИО. Их и берём.
+Оба файла — .xlsx. Парсер сам находит шапку в первых строках
+(ищет колонки «Оператор» и «Сумма платежа»/«Сумма»). Если шапки нет —
+использует дефолтное расположение: Сумма в колонке C, ФИО в колонке E.
 
 Итог — по каждому оператору:
   Итого   = previous + current
   5%      = Итого * 0.05
   На руки = 5% * 0.87 * 1.6
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -28,6 +26,13 @@ from ..models import DebtorPeriod, DebtorRecord, Operator
 
 FIO_PATTERN = re_compile(r"^[А-ЯЁ][а-яё\-]+\s+[А-ЯЁ]\.[А-ЯЁ]?\.?$")
 
+# Дефолт, если шапку не нашли: Сумма в C, ФИО в E
+DEFAULT_AMOUNT_COL = 3
+DEFAULT_OPERATOR_COL = 5
+
+# Максимум строк, среди которых ищем шапку
+HEADER_SEARCH_LIMIT = 15
+
 
 def _looks_like_fio(value) -> bool:
     if value is None:
@@ -40,45 +45,65 @@ def _to_float(value) -> float:
     if value is None:
         return 0.0
     try:
-        return float(str(value).replace(",", ".").strip())
+        return float(str(value).replace(" ", "").replace(",", ".").strip())
     except (ValueError, TypeError):
         return 0.0
 
 
-def _parse_previous(path: Path) -> dict[str, float]:
-    """A=Сумма, C=ФИО. Построчно."""
+def _detect_columns(ws) -> tuple[int, int, int]:
+    """Возвращает (operator_col, amount_col, first_data_row).
+
+    Ищет шапку в первых HEADER_SEARCH_LIMIT строках. Ищет по всем колонкам
+    слова «оператор» и «сумма».
+    """
+    operator_col: int | None = None
+    amount_col: int | None = None
+    header_row: int | None = None
+
+    max_row = min(HEADER_SEARCH_LIMIT, ws.max_row)
+    max_col = min(ws.max_column, 15)
+
+    for row_idx in range(1, max_row + 1):
+        row_operator_col: int | None = None
+        row_amount_col: int | None = None
+        for col_idx in range(1, max_col + 1):
+            v = ws.cell(row=row_idx, column=col_idx).value
+            if v is None or not isinstance(v, str):
+                continue
+            v_lower = v.strip().lower()
+            if "оператор" in v_lower:
+                row_operator_col = col_idx
+            if "сумма" in v_lower:
+                row_amount_col = col_idx
+        if row_operator_col is not None and row_amount_col is not None:
+            operator_col = row_operator_col
+            amount_col = row_amount_col
+            header_row = row_idx
+            break
+
+    if header_row is not None:
+        return operator_col, amount_col, header_row + 1
+
+    # Шапки нет — дефолт
+    return DEFAULT_OPERATOR_COL, DEFAULT_AMOUNT_COL, 1
+
+
+def _parse_file(path: Path) -> dict[str, float]:
+    """Читает .xlsx и возвращает {ФИО: сумма}."""
     wb = load_workbook(path, data_only=True, read_only=True)
     ws = wb.active
+
+    operator_col, amount_col, first_data_row = _detect_columns(ws)
+
     result: dict[str, float] = {}
 
-    for row_idx in range(1, ws.max_row + 1):
-        a = ws.cell(row=row_idx, column=1).value
-        c = ws.cell(row=row_idx, column=3).value
-        if not _looks_like_fio(c):
+    for row_idx in range(first_data_row, ws.max_row + 1):
+        fio_raw = ws.cell(row=row_idx, column=operator_col).value
+        if not _looks_like_fio(fio_raw):
             continue
-        amount = _to_float(a)
-        fio = str(c).strip()
+        amount = _to_float(ws.cell(row=row_idx, column=amount_col).value)
+        fio = str(fio_raw).strip()
         result[fio] = result.get(fio, 0.0) + amount
-
-    return result
-
-
-def _parse_current(path: Path) -> dict[str, float]:
-    """Заголовки блоков: F=Сумма, G=ФИО."""
-    wb = load_workbook(path, data_only=True, read_only=True)
-    ws = wb.active
-    result: dict[str, float] = {}
-
-    for row_idx in range(1, ws.max_row + 1):
-        f = ws.cell(row=row_idx, column=6).value
-        g = ws.cell(row=row_idx, column=7).value
-        if not _looks_like_fio(g):
-            continue
-        amount = _to_float(f)
-        if amount <= 0:
-            continue
-        fio = str(g).strip()
-        result[fio] = amount  # заголовок блока = итог оператора
 
     return result
 
@@ -99,17 +124,20 @@ def import_debtor_xlsx(
     year: int,
     month: int,
 ) -> DebtorImportReport:
-    previous = _parse_previous(previous_path)
-    current = _parse_current(current_path)
+    previous = _parse_file(previous_path)
+    current = _parse_file(current_path)
 
     period = db.scalar(
-        select(DebtorPeriod).where(DebtorPeriod.year == year, DebtorPeriod.month == month)
+        select(DebtorPeriod).where(
+            DebtorPeriod.year == year, DebtorPeriod.month == month
+        )
     )
     if period is None:
         period = DebtorPeriod(year=year, month=month)
         db.add(period)
         db.flush()
 
+    # Полная перезапись периода
     db.execute(delete(DebtorRecord).where(DebtorRecord.period_id == period.id))
 
     report = DebtorImportReport(period_id=period.id)
