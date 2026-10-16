@@ -10,5 +10,6 @@ export function usePermissions() {
     canManageUsers: role === "admin",
     canEditEvaluations:
       role === "supervisor" || role === "head" || role === "admin",
+    isOperator: role === "operator",
   };
 }
