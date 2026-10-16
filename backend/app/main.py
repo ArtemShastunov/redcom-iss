@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .api import (
     auth,
+    debtor,
     evaluations,
     export,
     imports,
@@ -41,6 +42,7 @@ app.include_router(supervisor_periods.router)
 app.include_router(scoring.router)
 app.include_router(export.router)
 app.include_router(imports.router)
+app.include_router(debtor.router)
 
 
 @app.get("/api/health")

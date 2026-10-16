@@ -1,6 +1,7 @@
 import { Route, Routes } from "react-router-dom";
 import Layout from "./components/Layout";
 import ProtectedRoute from "./components/ProtectedRoute";
+import Debtors from "./routes/Debtors";
 import Home from "./routes/Home";
 import Login from "./routes/Login";
 import NotFound from "./routes/NotFound";
@@ -25,6 +26,7 @@ export default function App() {
           />
           <Route path="/operators" element={<Operators />} />
           <Route path="/users" element={<Users />} />
+          <Route path="/debtors" element={<Debtors />} />
           <Route path="*" element={<NotFound />} />
         </Route>
       </Route>

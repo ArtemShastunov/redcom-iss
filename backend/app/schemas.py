@@ -99,15 +99,15 @@ class UserPatch(BaseModel):
     is_active: bool | None = None
 
 
+class PasswordChangeIn(BaseModel):
+    new_password: str = Field(min_length=1, max_length=200)
+
+
 class ChangeCredentialsIn(BaseModel):
     current_password: str = Field(min_length=1, max_length=200)
     new_login: str | None = Field(default=None, min_length=1, max_length=64)
     new_password: str | None = Field(default=None, min_length=1, max_length=200)
     new_password_confirm: str | None = Field(default=None, min_length=1, max_length=200)
-
-
-class PasswordChangeIn(BaseModel):
-    new_password: str = Field(min_length=1, max_length=200)
 
 
 # ---------- evaluations ----------
@@ -222,3 +222,47 @@ class SupervisorPeriodOut(BaseModel):
     period_id: int
     norm_score: int | None
     supervisor: UserShort
+
+
+# ---------- debtor ----------
+
+
+class DebtorPeriodOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    year: int
+    month: int
+    created_at: datetime
+
+
+class DebtorRowOut(BaseModel):
+    operator_id: int
+    operator_name: str
+    operator_premium_name: str | None
+    previous_amount: float
+    current_amount: float
+    total: float
+    percent_5: float
+    net_amount: float
+
+
+class DebtorReportOut(BaseModel):
+    period_id: int
+    year: int
+    month: int
+    rows: list[DebtorRowOut]
+    total_previous: float
+    total_current: float
+    total_total: float
+    total_percent_5: float
+    total_net: float
+
+
+class DebtorImportResult(BaseModel):
+    period_id: int
+    year: int
+    month: int
+    matched: int
+    unmatched: list[str]
+    previous_only: list[str]
+    current_only: list[str]

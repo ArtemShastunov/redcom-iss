@@ -43,6 +43,9 @@ export default function Layout() {
               <NavLink to="/periods" className={navLinkCls}>
                 {isOperator ? "Мои оценки" : "Периоды"}
               </NavLink>
+              <NavLink to="/debtors" className={navLinkCls}>
+                Дебиторка
+              </NavLink>
               {canManageOperators && (
                 <NavLink to="/operators" className={navLinkCls}>
                   Операторы

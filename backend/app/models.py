@@ -8,6 +8,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Integer,
+    Numeric,
     String,
     Text,
     UniqueConstraint,
@@ -40,9 +41,6 @@ class User(Base):
     role: Mapped[UserRole] = mapped_column(String(20))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
-    # Ссылка на оператора. Заполнена только для роли OPERATOR.
-    # Если оператора деактивируют или удалят — аккаунт отвяжется (SET NULL),
-    # но сам пользователь останется.
     operator_id: Mapped[int | None] = mapped_column(
         ForeignKey("operators.id", ondelete="SET NULL"),
         nullable=True,
@@ -167,3 +165,34 @@ class SupervisorPeriod(Base):
     norm_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     supervisor: Mapped[User] = relationship()
+
+
+class DebtorPeriod(Base):
+    __tablename__ = "debtor_periods"
+    __table_args__ = (
+        UniqueConstraint("year", "month", name="uq_debtor_periods_year_month"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    year: Mapped[int] = mapped_column(Integer)
+    month: Mapped[int] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class DebtorRecord(Base):
+    __tablename__ = "debtor_records"
+    __table_args__ = (
+        UniqueConstraint(
+            "period_id", "operator_id", name="uq_debtor_records_period_operator"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    period_id: Mapped[int] = mapped_column(
+        ForeignKey("debtor_periods.id", ondelete="CASCADE"), index=True
+    )
+    operator_id: Mapped[int] = mapped_column(ForeignKey("operators.id"), index=True)
+    previous_amount: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
+    current_amount: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
+
+    operator: Mapped[Operator] = relationship()

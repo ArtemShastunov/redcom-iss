@@ -8,8 +8,9 @@ from sqlalchemy import select, text
 
 from .db import SessionLocal
 from .exporters.iss_xlsx import export_iss_xlsx
-from .importers.iss_xlsx import import_iss_xlsx
 from .importers.callbacks_xlsx import import_callbacks_xlsx
+from .importers.debtor_xlsx import import_debtor_xlsx
+from .importers.iss_xlsx import import_iss_xlsx
 from .importers.premiums_xlsx import import_premiums_xlsx
 from .models import Operator, Period, User, UserRole
 from .security import hash_password, make_login_from_full_name
@@ -86,7 +87,6 @@ def cmd_change_password(args: argparse.Namespace) -> int:
 
 
 def cmd_create_operator_accounts(args: argparse.Namespace) -> int:
-    """Массово создаёт аккаунты операторам, у которых их ещё нет."""
     default_password = args.password or "changeme2026"
 
     db = SessionLocal()
@@ -338,6 +338,31 @@ def cmd_import_callbacks_xlsx(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_import_debtor_xlsx(args: argparse.Namespace) -> int:
+    db = SessionLocal()
+    try:
+        report = import_debtor_xlsx(
+            previous_path=Path(args.previous),
+            current_path=Path(args.current),
+            db=db,
+            year=args.year,
+            month=args.month,
+        )
+    except Exception as e:
+        print(f"Import failed: {e}", file=sys.stderr)
+        return 2
+    finally:
+        db.close()
+
+    print(f"Period: {args.year}-{args.month:02d} (id={report.period_id})")
+    print(f"Matched: {report.matched}")
+    if report.unmatched:
+        print(f"Unmatched: {len(report.unmatched)}")
+        for n in report.unmatched:
+            print(f"  {n}")
+    return 0
+
+
 def cmd_delete_period(args: argparse.Namespace) -> int:
     db = SessionLocal()
     try:
@@ -345,7 +370,7 @@ def cmd_delete_period(args: argparse.Namespace) -> int:
             select(Period).where(Period.year == args.year, Period.month == args.month)
         )
         if period is None:
-            print(f"Period not found", file=sys.stderr)
+            print("Period not found", file=sys.stderr)
             return 1
         pid = period.id
         db.execute(text("DELETE FROM evaluations WHERE period_id = :pid"), {"pid": pid})
@@ -405,11 +430,7 @@ def main() -> int:
         "create-operator-accounts",
         help="Массово создать аккаунты всем активным операторам",
     )
-    p.add_argument(
-        "--password",
-        default=None,
-        help="Пароль для всех (по умолчанию changeme2026)",
-    )
+    p.add_argument("--password", default=None)
     p.set_defaults(func=cmd_create_operator_accounts)
 
     p = sub.add_parser("import-iss-xlsx")
@@ -441,6 +462,13 @@ def main() -> int:
     p.add_argument("--year", type=int, required=True)
     p.add_argument("--month", type=int, required=True)
     p.set_defaults(func=cmd_import_callbacks_xlsx)
+
+    p = sub.add_parser("import-debtor-xlsx")
+    p.add_argument("previous", help="Файл остатков .xlsx")
+    p.add_argument("current", help="Файл текущего месяца .xlsx")
+    p.add_argument("--year", type=int, required=True)
+    p.add_argument("--month", type=int, required=True)
+    p.set_defaults(func=cmd_import_debtor_xlsx)
 
     p = sub.add_parser("delete-period")
     p.add_argument("--year", type=int, required=True)
