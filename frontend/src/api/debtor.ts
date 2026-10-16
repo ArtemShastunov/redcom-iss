@@ -48,6 +48,10 @@ export function fetchDebtorPeriod(id: number): Promise<DebtorReport> {
   return apiFetch<DebtorReport>(`/api/debtor/periods/${id}`);
 }
 
+export function deleteDebtorPeriod(id: number): Promise<void> {
+  return apiFetch<void>(`/api/debtor/periods/${id}`, { method: "DELETE" });
+}
+
 export async function uploadDebtorFiles(
   previous: File,
   current: File,

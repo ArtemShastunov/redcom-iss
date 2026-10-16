@@ -24,9 +24,18 @@ from ..schemas import (
 router = APIRouter(prefix="/api/debtor", tags=["debtor"])
 
 MONTHS_RU = {
-    1: "Январь", 2: "Февраль", 3: "Март", 4: "Апрель",
-    5: "Май", 6: "Июнь", 7: "Июль", 8: "Август",
-    9: "Сентябрь", 10: "Октябрь", 11: "Ноябрь", 12: "Декабрь",
+    1: "Январь",
+    2: "Февраль",
+    3: "Март",
+    4: "Апрель",
+    5: "Май",
+    6: "Июнь",
+    7: "Июль",
+    8: "Август",
+    9: "Сентябрь",
+    10: "Октябрь",
+    11: "Ноябрь",
+    12: "Декабрь",
 }
 
 XLSX_MEDIA = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -51,12 +60,14 @@ def _compute_row(rec: DebtorRecord) -> DebtorRowOut:
 
 
 def _build_report(db: Session, period: DebtorPeriod) -> DebtorReportOut:
-    records = list(db.scalars(
-        select(DebtorRecord)
-        .options(joinedload(DebtorRecord.operator))
-        .where(DebtorRecord.period_id == period.id)
-        .order_by(DebtorRecord.id)
-    ))
+    records = list(
+        db.scalars(
+            select(DebtorRecord)
+            .options(joinedload(DebtorRecord.operator))
+            .where(DebtorRecord.period_id == period.id)
+            .order_by(DebtorRecord.id)
+        )
+    )
     rows = [_compute_row(r) for r in records]
 
     return DebtorReportOut(
@@ -77,9 +88,13 @@ def list_periods(
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
 ) -> list[DebtorPeriod]:
-    return list(db.scalars(
-        select(DebtorPeriod).order_by(DebtorPeriod.year.desc(), DebtorPeriod.month.desc())
-    ))
+    return list(
+        db.scalars(
+            select(DebtorPeriod).order_by(
+                DebtorPeriod.year.desc(), DebtorPeriod.month.desc()
+            )
+        )
+    )
 
 
 @router.get("/periods/{period_id}", response_model=DebtorReportOut)
@@ -92,6 +107,23 @@ def get_period(
     if period is None:
         raise HTTPException(404, "Period not found")
     return _build_report(db, period)
+
+
+@router.delete("/periods/{period_id}", status_code=204)
+def delete_period(
+    period_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_role(UserRole.HEAD, UserRole.ADMIN)),
+) -> None:
+    """Удалить период дебиторки целиком вместе со всеми записями.
+
+    Доступно только начальнику ИСС и админу.
+    """
+    period = db.get(DebtorPeriod, period_id)
+    if period is None:
+        raise HTTPException(404, "Period not found")
+    db.delete(period)
+    db.commit()
 
 
 @router.post("/import", response_model=DebtorImportResult)
@@ -155,8 +187,12 @@ def export_period(
     ws.title = "Премия"
 
     headers = [
-        "Оператор", "Остатки", MONTHS_RU.get(period.month, str(period.month)),
-        "Итого", "5%", "На руки",
+        "Оператор",
+        "Остатки",
+        MONTHS_RU.get(period.month, str(period.month)),
+        "Итого",
+        "5%",
+        "На руки",
     ]
     for col, h in enumerate(headers, start=1):
         c = ws.cell(row=1, column=col, value=h)
@@ -176,7 +212,9 @@ def export_period(
     ws.cell(row=total_row, column=2, value=report.total_previous).font = Font(bold=True)
     ws.cell(row=total_row, column=3, value=report.total_current).font = Font(bold=True)
     ws.cell(row=total_row, column=4, value=report.total_total).font = Font(bold=True)
-    ws.cell(row=total_row, column=5, value=report.total_percent_5).font = Font(bold=True)
+    ws.cell(row=total_row, column=5, value=report.total_percent_5).font = Font(
+        bold=True
+    )
     ws.cell(row=total_row, column=6, value=report.total_net).font = Font(bold=True)
 
     for i, w in enumerate([28, 16, 16, 16, 16, 16], start=1):

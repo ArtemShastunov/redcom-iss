@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  deleteDebtorPeriod,
   downloadDebtorPeriod,
   fetchDebtorPeriod,
   listDebtorPeriods,
@@ -24,6 +25,7 @@ export default function Debtors() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const periods = useQuery({
     queryKey: ["debtor-periods"],
@@ -40,6 +42,24 @@ export default function Debtors() {
 
   const activePeriod = periods.data?.find((p) => p.id === activeId);
 
+  const deleteMut = useMutation({
+    mutationFn: (id: number) => deleteDebtorPeriod(id),
+    onSuccess: () => {
+      setSelectedId(null);
+      setDeleteError(null);
+      qc.invalidateQueries({ queryKey: ["debtor-periods"] });
+    },
+    onError: (e: unknown) => {
+      const status = (e as { status?: number }).status;
+      const detail = (e as { detail?: string }).detail;
+      setDeleteError(
+        status === 403
+          ? "Только начальник ИСС и админ могут удалять периоды"
+          : String(detail ?? "Не удалось удалить период"),
+      );
+    },
+  });
+
   async function handleExport() {
     if (!activePeriod) return;
     setExporting(true);
@@ -53,11 +73,25 @@ export default function Debtors() {
     }
   }
 
+  function handleDelete() {
+    if (!activePeriod) return;
+    const label = `${monthName(activePeriod.month)} ${activePeriod.year}`;
+    if (
+      !confirm(
+        `Удалить период дебиторки «${label}»?\n\n` +
+          `Все данные за этот период будут удалены без возможности восстановления.`,
+      )
+    ) {
+      return;
+    }
+    deleteMut.mutate(activePeriod.id);
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-2xl font-semibold">Дебиторка</h1>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           {canManagePeriods && (
             <button
               onClick={() => setImportOpen(true)}
@@ -75,8 +109,29 @@ export default function Debtors() {
               {exporting ? "Экспорт…" : "Экспорт в Excel"}
             </button>
           )}
+          {activePeriod && canManagePeriods && (
+            <button
+              onClick={handleDelete}
+              disabled={deleteMut.isPending}
+              className="rounded border border-red-300 text-red-700 px-3 py-1.5 text-sm hover:bg-red-50 disabled:opacity-50"
+            >
+              {deleteMut.isPending ? "Удаление…" : "Удалить период"}
+            </button>
+          )}
         </div>
       </div>
+
+      {deleteError && (
+        <div className="bg-red-50 border border-red-200 rounded px-4 py-3 text-sm text-red-800 flex justify-between items-start gap-4">
+          <span>{deleteError}</span>
+          <button
+            onClick={() => setDeleteError(null)}
+            className="text-red-600 hover:text-red-900 text-lg leading-none"
+          >
+            ×
+          </button>
+        </div>
+      )}
 
       {periods.data && periods.data.length > 0 && (
         <div className="flex gap-2 text-sm flex-wrap">
@@ -200,6 +255,7 @@ function DebtorImportModal({ onClose }: { onClose: () => void }) {
       setResult(data);
       setError(null);
       qc.invalidateQueries({ queryKey: ["debtor-periods"] });
+      qc.invalidateQueries({ queryKey: ["debtor-period"] });
     },
     onError: (e: unknown) => {
       setError(e instanceof Error ? e.message : "Не удалось импортировать");
@@ -245,6 +301,9 @@ function DebtorImportModal({ onClose }: { onClose: () => void }) {
           <div className="bg-emerald-50 border border-emerald-200 rounded px-3 py-2">
             Импорт завершён. Совпало с операторами: <b>{result.matched}</b>
           </div>
+          <div className="text-xs text-slate-500">
+            Если период уже существовал — данные перезаписаны.
+          </div>
           {result.unmatched.length > 0 && (
             <div className="bg-amber-50 border border-amber-200 rounded px-3 py-2">
               <div className="font-medium mb-1">
@@ -265,6 +324,11 @@ function DebtorImportModal({ onClose }: { onClose: () => void }) {
               {error}
             </div>
           )}
+
+          <div className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+            Если период с указанными годом и месяцем уже существует —
+            его данные будут <b>полностью перезаписаны</b>.
+          </div>
 
           <div className="grid grid-cols-2 gap-3">
             <label className="block text-sm">
@@ -332,7 +396,7 @@ function DebtorImportModal({ onClose }: { onClose: () => void }) {
 
           <div className="text-xs text-slate-500">
             Файлы <b>.xls</b> нужно пересохранить в <b>.xlsx</b> перед загрузкой.
-            Импорт перезаписывает период целиком.
+            Формат: две колонки — <b>ФИО</b> и <b>Сумма</b>, шапка в первой строке.
           </div>
         </div>
       )}
