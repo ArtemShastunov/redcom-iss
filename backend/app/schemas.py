@@ -99,6 +99,13 @@ class UserPatch(BaseModel):
     is_active: bool | None = None
 
 
+class ChangeCredentialsIn(BaseModel):
+    current_password: str = Field(min_length=1, max_length=200)
+    new_login: str | None = Field(default=None, min_length=1, max_length=64)
+    new_password: str | None = Field(default=None, min_length=1, max_length=200)
+    new_password_confirm: str | None = Field(default=None, min_length=1, max_length=200)
+
+
 class PasswordChangeIn(BaseModel):
     new_password: str = Field(min_length=1, max_length=200)
 

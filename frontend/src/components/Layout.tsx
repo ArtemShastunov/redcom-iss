@@ -1,20 +1,24 @@
+import { useState } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { logout } from "../api/auth";
 import { useMe } from "../lib/useMe";
 import { usePermissions } from "../lib/usePermissions";
+import ProfileModal from "./ProfileModal";
 
 const ROLE_LABEL: Record<string, string> = {
   supervisor: "Супервайзер",
   head: "Начальник ИСС",
   admin: "Админ",
+  operator: "Оператор",
 };
 
 export default function Layout() {
   const me = useMe();
-  const { canManageOperators, canManageUsers } = usePermissions();
+  const { canManageOperators, canManageUsers, isOperator } = usePermissions();
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const [profileOpen, setProfileOpen] = useState(false);
 
   const doLogout = useMutation({
     mutationFn: logout,
@@ -37,7 +41,7 @@ export default function Layout() {
             </Link>
             <nav className="flex items-center gap-4">
               <NavLink to="/periods" className={navLinkCls}>
-                Периоды
+                {isOperator ? "Мои оценки" : "Периоды"}
               </NavLink>
               {canManageOperators && (
                 <NavLink to="/operators" className={navLinkCls}>
@@ -53,12 +57,16 @@ export default function Layout() {
           </div>
           {me.data && (
             <div className="flex items-center gap-4 text-sm">
-              <span className="text-slate-600">
+              <button
+                onClick={() => setProfileOpen(true)}
+                className="text-slate-600 hover:text-slate-900"
+                title="Изменить логин или пароль"
+              >
                 {me.data.full_name}{" "}
                 <span className="text-slate-400">
                   ({ROLE_LABEL[me.data.role] ?? me.data.role})
                 </span>
-              </span>
+              </button>
               <button
                 onClick={() => doLogout.mutate()}
                 className="text-slate-500 hover:text-slate-900"
@@ -72,6 +80,13 @@ export default function Layout() {
       <main className="flex-1 max-w-6xl w-full mx-auto px-4 py-6">
         <Outlet />
       </main>
+
+      {profileOpen && me.data && (
+        <ProfileModal
+          currentLogin={me.data.login}
+          onClose={() => setProfileOpen(false)}
+        />
+      )}
     </div>
   );
 }

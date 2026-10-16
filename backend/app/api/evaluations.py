@@ -14,7 +14,7 @@ def _ensure_period_open(db: Session, period_id: int) -> Period:
     if p is None:
         raise HTTPException(404, "Period not found")
     if p.status == PeriodStatus.CLOSED:
-        raise HTTPException(409, "Period is closed")
+        raise HTTPException(409, "Период закрыт. Откройте его, чтобы вносить правки.")
     return p
 
 
@@ -122,16 +122,20 @@ def patch_evaluation(
 
     data = payload.model_dump(exclude_unset=True)
 
-    # Смена супервайзера — только head/admin, и только на реального супервайзера.
+    # Смена супервайзера — только head/admin. Если тот же supervisor_id —
+    # это НЕ смена, а обычное сохранение карточки. Просто игнорируем поле.
     if "supervisor_id" in data and data["supervisor_id"] is not None:
-        if user.role not in (UserRole.HEAD, UserRole.ADMIN):
-            raise HTTPException(
-                403,
-                "Только начальник ИСС или админ может менять супервайзера",
-            )
-        target = db.get(User, data["supervisor_id"])
-        if target is None or target.role != UserRole.SUPERVISOR:
-            raise HTTPException(404, "Супервайзер не найден")
+        new_sup_id = data["supervisor_id"]
+        if new_sup_id != ev.supervisor_id:
+            if user.role not in (UserRole.HEAD, UserRole.ADMIN):
+                raise HTTPException(
+                    403,
+                    "Только начальник ИСС или админ может менять супервайзера",
+                )
+            target = db.get(User, new_sup_id)
+            if target is None or target.role != UserRole.SUPERVISOR:
+                raise HTTPException(404, "Супервайзер не найден")
+        del data["supervisor_id"]
 
     for k, v in data.items():
         setattr(ev, k, v)
