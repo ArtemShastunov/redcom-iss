@@ -3,10 +3,15 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..deps import get_current_user, get_db
+from ..deps import get_db, require_role
 from ..models import (
-    Evaluation, Operator, OperatorPeriod, Period,
-    SupervisorPeriod, User, UserRole,
+    Evaluation,
+    Operator,
+    OperatorPeriod,
+    Period,
+    SupervisorPeriod,
+    User,
+    UserRole,
 )
 from ..scoring import (
     OperatorEvaluationSummary,
@@ -66,7 +71,7 @@ class PeriodScoringOut(BaseModel):
 def get_period_scoring(
     period_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(require_role(UserRole.SUPERVISOR, UserRole.HEAD, UserRole.ADMIN)),
 ) -> PeriodScoringOut:
     period = db.get(Period, period_id)
     if period is None:
@@ -75,19 +80,24 @@ def get_period_scoring(
     all_operators = list(db.scalars(select(Operator).order_by(Operator.id)))
     operators_by_id = {op.id: op for op in all_operators}
 
-    evals = list(db.scalars(select(Evaluation).where(Evaluation.period_id == period_id)))
+    evals = list(
+        db.scalars(select(Evaluation).where(Evaluation.period_id == period_id))
+    )
     by_operator: dict[int, list[Evaluation]] = {}
     for e in evals:
         by_operator.setdefault(e.operator_id, []).append(e)
 
     op_periods = {
         op.operator_id: op
-        for op in db.scalars(select(OperatorPeriod).where(OperatorPeriod.period_id == period_id))
+        for op in db.scalars(
+            select(OperatorPeriod).where(OperatorPeriod.period_id == period_id)
+        )
     }
 
     operators_with_data = set(by_operator.keys()) | set(op_periods.keys())
     included = [
-        op for op in operators_by_id.values()
+        op
+        for op in operators_by_id.values()
         if op.is_active or op.id in operators_with_data
     ]
 
@@ -101,38 +111,50 @@ def get_period_scoring(
         else:
             calls = len(evs)
 
-        summaries.append(score_operator(
-            operator_id=op.id,
-            operator_name=op.full_name,
-            tone_scores=[e.tone for e in evs],
-            completeness_scores=[e.completeness for e in evs],
-            dialog_scores=[e.dialog_1c for e in evs],
-            calls_handled=calls,
-            has_critical_errors=op_period.has_critical_errors if op_period else False,
-            critical_errors_reason=op_period.critical_errors_reason if op_period else None,
-            op_period=op_period,
-        ))
+        summaries.append(
+            score_operator(
+                operator_id=op.id,
+                operator_name=op.full_name,
+                tone_scores=[e.tone for e in evs],
+                completeness_scores=[e.completeness for e in evs],
+                dialog_scores=[e.dialog_1c for e in evs],
+                calls_handled=calls,
+                has_critical_errors=op_period.has_critical_errors
+                if op_period
+                else False,
+                critical_errors_reason=op_period.critical_errors_reason
+                if op_period
+                else None,
+                op_period=op_period,
+            )
+        )
 
     summaries = rank_and_award_operators(summaries)
 
-    supervisors = list(db.scalars(
-        select(User).where(User.role == UserRole.SUPERVISOR).order_by(User.id)
-    ))
+    supervisors = list(
+        db.scalars(
+            select(User).where(User.role == UserRole.SUPERVISOR).order_by(User.id)
+        )
+    )
     sup_periods = {
         sp.supervisor_id: sp
-        for sp in db.scalars(select(SupervisorPeriod).where(SupervisorPeriod.period_id == period_id))
+        for sp in db.scalars(
+            select(SupervisorPeriod).where(SupervisorPeriod.period_id == period_id)
+        )
     }
     sup_summaries: list[SupervisorEvaluationSummary] = []
     for s in supervisors:
         sp = sup_periods.get(s.id)
         norm = sp.norm_score if sp else None
-        sup_summaries.append(SupervisorEvaluationSummary(
-            supervisor_id=s.id,
-            supervisor_name=s.full_name,
-            norm_score=norm,
-            summary_score=None,
-            premium=award_supervisor(norm),
-        ))
+        sup_summaries.append(
+            SupervisorEvaluationSummary(
+                supervisor_id=s.id,
+                supervisor_name=s.full_name,
+                norm_score=norm,
+                summary_score=None,
+                premium=award_supervisor(norm),
+            )
+        )
 
     total = sum(o.premium for o in summaries) + sum(s.premium for s in sup_summaries)
 

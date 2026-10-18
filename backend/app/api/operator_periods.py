@@ -2,11 +2,16 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
-from ..deps import get_current_user, get_db, require_role
+from ..deps import get_db, require_role
 from ..models import Operator, OperatorPeriod, Period, PeriodStatus, User, UserRole
 from ..schemas import OperatorPeriodIn, OperatorPeriodOut
 
 router = APIRouter(prefix="/api/operator-periods", tags=["operator-periods"])
+
+# Роли, которые могут видеть calls_handled/override/критические ошибки.
+# Оператору эти данные не показываем.
+view_roles = require_role(UserRole.SUPERVISOR, UserRole.HEAD, UserRole.ADMIN)
+manage_roles = require_role(UserRole.HEAD, UserRole.ADMIN)
 
 
 def _ensure_period_open(db: Session, period_id: int) -> None:
@@ -21,7 +26,7 @@ def _ensure_period_open(db: Session, period_id: int) -> None:
 def list_operator_periods(
     period_id: int = Query(...),
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(view_roles),
 ) -> list[OperatorPeriod]:
     q = (
         select(OperatorPeriod)
@@ -37,7 +42,7 @@ def upsert_operator_period(
     operator_id: int,
     payload: OperatorPeriodIn,
     db: Session = Depends(get_db),
-    _: User = Depends(require_role(UserRole.HEAD, UserRole.ADMIN)),
+    _: User = Depends(manage_roles),
 ) -> OperatorPeriod:
     _ensure_period_open(db, period_id)
     if db.get(Operator, operator_id) is None:
@@ -73,7 +78,7 @@ def delete_operator_period(
     period_id: int,
     operator_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(require_role(UserRole.HEAD, UserRole.ADMIN)),
+    _: User = Depends(manage_roles),
 ) -> None:
     _ensure_period_open(db, period_id)
     op = db.get(OperatorPeriod, (period_id, operator_id))
@@ -81,4 +86,3 @@ def delete_operator_period(
         raise HTTPException(404, "Not found")
     db.delete(op)
     db.commit()
-

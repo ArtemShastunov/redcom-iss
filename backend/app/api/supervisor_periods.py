@@ -2,11 +2,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
-from ..deps import get_current_user, get_db, require_role
+from ..deps import get_db, require_role
 from ..models import Period, PeriodStatus, SupervisorPeriod, User, UserRole
 from ..schemas import SupervisorPeriodIn, SupervisorPeriodOut
 
 router = APIRouter(prefix="/api/supervisor-periods", tags=["supervisor-periods"])
+
+view_roles = require_role(UserRole.SUPERVISOR, UserRole.HEAD, UserRole.ADMIN)
+manage_roles = require_role(UserRole.HEAD, UserRole.ADMIN)
 
 
 def _ensure_period_open(db: Session, period_id: int) -> None:
@@ -21,7 +24,7 @@ def _ensure_period_open(db: Session, period_id: int) -> None:
 def list_supervisor_periods(
     period_id: int = Query(...),
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(view_roles),
 ) -> list[SupervisorPeriod]:
     q = (
         select(SupervisorPeriod)
@@ -37,7 +40,7 @@ def upsert_supervisor_period(
     supervisor_id: int,
     payload: SupervisorPeriodIn,
     db: Session = Depends(get_db),
-    _: User = Depends(require_role(UserRole.HEAD, UserRole.ADMIN)),
+    _: User = Depends(manage_roles),
 ) -> SupervisorPeriod:
     _ensure_period_open(db, period_id)
     sup = db.get(User, supervisor_id)

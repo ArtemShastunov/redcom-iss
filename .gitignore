@@ -15,3 +15,7 @@ frontend/dist/
 
 pgdata/
 backend/data/*.xlsx
+*.sql
+load_dump.py
+backend/local_data.sql
+backend/load_dump.py

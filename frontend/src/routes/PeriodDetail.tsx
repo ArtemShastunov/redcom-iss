@@ -28,11 +28,12 @@ import ImportPremiumsModal from "../components/ImportPremiumsModal";
 import ImportCallbacksModal from "../components/ImportCallbacksModal";
 import OperatorPeriodForm from "../components/OperatorPeriodForm";
 import SupervisorPeriodForm from "../components/SupervisorPeriodForm";
+import OperatorPeriodView from "../components/OperatorPeriodView";
 
 export default function PeriodDetail() {
   const { id } = useParams<{ id: string }>();
   const periodId = Number(id);
-  const { canManagePeriods } = usePermissions();
+  const { canManagePeriods, isOperator } = usePermissions();
   const qc = useQueryClient();
 
   const periods = useQuery({ queryKey: ["periods"], queryFn: listPeriods });
@@ -41,13 +42,13 @@ export default function PeriodDetail() {
   const scoring = useQuery({
     queryKey: ["scoring", periodId],
     queryFn: () => fetchPeriodScoring(periodId),
-    enabled: Number.isFinite(periodId),
+    enabled: Number.isFinite(periodId) && !isOperator,
   });
 
   const opPeriods = useQuery({
     queryKey: ["op-periods", periodId],
     queryFn: () => listOperatorPeriods(periodId),
-    enabled: Number.isFinite(periodId),
+    enabled: Number.isFinite(periodId) && !isOperator,
   });
 
   const close = useMutation({
@@ -110,6 +111,12 @@ export default function PeriodDetail() {
   const [exporting, setExporting] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [callbacksOpen, setCallbacksOpen] = useState(false);
+
+  // Оператор видит read-only представление — те же оценки, но без
+  // правок, без экспорта всей ведомости, с кнопкой «скачать свои».
+  if (isOperator && period) {
+    return <OperatorPeriodView periodId={periodId} period={period} />;
+  }
 
   if (!period && periods.isLoading) {
     return <div className="text-slate-500">Загрузка…</div>;
