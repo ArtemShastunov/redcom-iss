@@ -2,15 +2,18 @@
 
 Формат — «Совместные итоги_<Месяц>.xlsx»:
   * операторские листы (Layout A): A1 = "ФИО", A2 = ФИО оператора,
-    B2 (реже A2) = имя первого супервайзера; далее блоки по 15 звонков,
-    каждый следующий блок начинается со строки, где в колонке A или B
-    стоит имя супервайзера;
+    в теле — блоки по 15 звонков, каждый блок начинается со строки,
+    где в колонке A или B стоит имя супервайзера;
   * листы супервайзеров (Layout B): лист назван по имени супервайзера
     («София», «Ольга»), в теле — плоский список строк без привязки
-    к оператору, поэтому такие листы пропускаются с предупреждением;
+    к оператору;
   * лист «Статистика» игнорируется.
 
 Идемпотентен: повторный запуск полностью пересоздаёт оценки периода.
+
+При импорте применяются псевдонимы имён (см. OPERATOR_NAME_ALIASES) —
+так «Голубятников Леша» из старых файлов превращается в
+«Голубятников Алексей», и не создаёт дубликат в БД.
 """
 from __future__ import annotations
 
@@ -32,11 +35,22 @@ SUPERVISOR_NAMES = {"София", "Ольга"}
 SKIP_SHEETS = {"Статистика"}
 HEADER_CELL = "ФИО"
 
-STUB_PASSWORD = "changeme"
+STUB_PASSWORD = "changeme2026"
 STUB_LOGIN_BY_NAME = {
     "София": "sofia",
     "Ольга": "olga",
 }
+
+# Псевдонимы имён. Ключ — как в файле Excel, значение — как в БД.
+# Ключи храним в нижнем регистре и с обрезанными пробелами.
+OPERATOR_NAME_ALIASES: dict[str, str] = {
+    "голубятников леша": "Голубятников Алексей",
+}
+
+
+def _normalize_operator_name(name: str) -> str:
+    key = name.strip().lower()
+    return OPERATOR_NAME_ALIASES.get(key, name.strip())
 
 
 @dataclass
@@ -120,15 +134,16 @@ def _get_or_create_supervisor(db: Session, name: str, report: ImportReport) -> U
 
 
 def _get_or_create_operator(db: Session, full_name: str, report: ImportReport) -> Operator:
-    op = db.scalar(select(Operator).where(Operator.full_name == full_name))
+    normalized = _normalize_operator_name(full_name)
+    op = db.scalar(select(Operator).where(Operator.full_name == normalized))
     if op is not None:
-        if full_name not in report.operators_reused:
-            report.operators_reused.append(full_name)
+        if normalized not in report.operators_reused:
+            report.operators_reused.append(normalized)
         return op
-    op = Operator(full_name=full_name, is_active=True)
+    op = Operator(full_name=normalized, is_active=True)
     db.add(op)
     db.flush()
-    report.operators_created.append(full_name)
+    report.operators_created.append(normalized)
     return op
 
 
@@ -146,16 +161,11 @@ def _get_or_create_period(db: Session, year: int, month: int) -> Period:
 # ---------- парсинг листов ----------
 
 def _read_layout_a(sheet, db: Session, period: Period, report: ImportReport) -> int:
-    """Операторский лист: A2 = ФИО оператора, B2 (реже A2) = имя первого
-    супервайзера. Далее блоки по 15 звонков; переход к следующему блоку —
-    строка, где в A или B стоит имя супервайзера."""
     operator_name = _cell_str(sheet.cell(row=2, column=1).value)
     if not operator_name:
         raise ValueError(f"[{sheet.title}] пустая ячейка A2: не найден оператор")
     operator = _get_or_create_operator(db, operator_name, report)
 
-    # первый маркер супервайзера может стоять в B2 (как в этом файле),
-    # реже — в A2, но A2 занят ФИО оператора, так что смотрим B2.
     current_supervisor: User | None = None
     b2 = _cell_str(sheet.cell(row=2, column=2).value)
     if b2 in SUPERVISOR_NAMES:
@@ -208,14 +218,13 @@ def _read_layout_a(sheet, db: Session, period: Period, report: ImportReport) -> 
         db.add(ev)
         created += 1
 
-    report.per_operator_counts[operator_name] = report.per_operator_counts.get(operator_name, 0) + created
+    report.per_operator_counts[operator.full_name] = (
+        report.per_operator_counts.get(operator.full_name, 0) + created
+    )
     return created
 
 
 def _read_layout_b(sheet, db: Session, period: Period, report: ImportReport) -> int:
-    """Лист супервайзера: A1 = имя супервайзера, дальше плоский список
-    строк без привязки к оператору — импорт таких листов пропускается
-    с предупреждением."""
     a1 = _cell_str(sheet.cell(row=1, column=1).value)
     a2 = _cell_str(sheet.cell(row=2, column=1).value)
     supervisor_name = (
@@ -269,17 +278,14 @@ def import_iss_xlsx(
         a1 = _cell_str(sheet.cell(row=1, column=1).value)
         a2 = _cell_str(sheet.cell(row=2, column=1).value)
 
-        # 1. Лист супервайзера — по имени листа
         if sheet_name in SUPERVISOR_NAMES:
             report.evaluations_created += _read_layout_b(sheet, db, period, report)
             continue
 
-        # 2. Операторский лист — заголовок "ФИО", затем имя оператора в A2
         if a1 == HEADER_CELL and a2:
             report.evaluations_created += _read_layout_a(sheet, db, period, report)
             continue
 
-        # 3. Лист супервайзера — по A1/A2
         if a1 in SUPERVISOR_NAMES or a2 in SUPERVISOR_NAMES:
             report.evaluations_created += _read_layout_b(sheet, db, period, report)
             continue
