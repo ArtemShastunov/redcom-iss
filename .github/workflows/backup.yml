@@ -2,9 +2,8 @@ name: Database Backup
 
 on:
   schedule:
-    # Запуск каждый день в 03:00 по Москве (00:00 UTC)
     - cron: "0 0 * * *"
-  workflow_dispatch: # Позволяет запустить вручную из вкладки Actions
+  workflow_dispatch:
 
 jobs:
   backup:
@@ -14,23 +13,19 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install PostgreSQL client
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y postgresql-client
-
       - name: Create database dump
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
-          # set -o pipefail гарантирует, что если pg_dump упадет с ошибкой,
-          # весь шаг тоже упадёт, и мы не загрузим пустой файл.
           set -o pipefail
-
           TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
           FILENAME="backup_${TIMESTAMP}.sql.gz"
 
-          pg_dump "$DATABASE_URL" --no-owner --no-acl | gzip > $FILENAME
+          # Запускаем pg_dump версии 17 внутри Docker, чтобы версия совпадала с сервером
+          docker run --rm \
+            -e DATABASE_URL="$DATABASE_URL" \
+            postgres:17 \
+            sh -c 'pg_dump "$DATABASE_URL" --no-owner --no-acl' | gzip > $FILENAME
 
           echo "BACKUP_FILE=$FILENAME" >> $GITHUB_ENV
 
