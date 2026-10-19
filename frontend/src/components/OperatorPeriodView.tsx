@@ -19,7 +19,16 @@ export default function OperatorPeriodView({
   });
 
   if (scoring.isLoading) return <div className="text-slate-500">Загрузка…</div>;
-  if (!scoring.data) return <div className="text-slate-500">Ошибка загрузки</div>;
+  
+  if (scoring.isError) {
+    return (
+      <div className="text-red-600 bg-red-50 p-4 rounded border border-red-200">
+        Ошибка загрузки данных. Причина: {String(scoring.error)}
+      </div>
+    );
+  }
+  
+  if (!scoring.data) return <div className="text-slate-500">Нет данных</div>;
 
   return (
     <div className="space-y-4">
