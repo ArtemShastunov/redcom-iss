@@ -2,8 +2,9 @@ name: Database Backup
 
 on:
   schedule:
+    # Запуск каждый день в 03:00 по Москве (00:00 UTC)
     - cron: "0 0 * * *"
-  workflow_dispatch:
+  workflow_dispatch: # Позволяет запустить вручную из вкладки Actions
 
 jobs:
   backup:
@@ -22,6 +23,10 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
+          # set -o pipefail гарантирует, что если pg_dump упадет с ошибкой,
+          # весь шаг тоже упадёт, и мы не загрузим пустой файл.
+          set -o pipefail
+
           TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
           FILENAME="backup_${TIMESTAMP}.sql.gz"
 
