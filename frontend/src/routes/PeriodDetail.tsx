@@ -19,7 +19,7 @@ import {
   type SupervisorPeriodIn,
 } from "../api/supervisorPeriods";
 import { downloadPeriodXlsx } from "../api/export";
-import { periodLabel } from "../lib/format";
+import { periodLabel, formatOperatorName } from "../lib/format";
 import { usePermissions } from "../lib/usePermissions";
 import ScoreCell from "../components/ScoreCell";
 import StatusBadge from "../components/StatusBadge";
@@ -112,8 +112,6 @@ export default function PeriodDetail() {
   const [importOpen, setImportOpen] = useState(false);
   const [callbacksOpen, setCallbacksOpen] = useState(false);
 
-  // Оператор видит read-only представление — те же оценки, но без
-  // правок, без экспорта всей ведомости, с кнопкой «скачать свои».
   if (isOperator && period) {
     return <OperatorPeriodView periodId={periodId} period={period} />;
   }
@@ -243,7 +241,7 @@ export default function PeriodDetail() {
                         to={`/periods/${periodId}/operators/${op.operator_id}`}
                         className="text-slate-900 hover:underline"
                       >
-                        {op.operator_name}
+                        {formatOperatorName(op.operator_name)}
                       </Link>
                       {op.has_critical_errors && (
                         <span

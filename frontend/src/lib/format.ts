@@ -10,3 +10,9 @@ export function monthName(month: number): string {
 export function periodLabel(year: number, month: number): string {
   return `${monthName(month)} ${year}`;
 }
+
+export function formatOperatorName(name: string | null | undefined): string {
+  if (!name) return "";
+  if (name.trim() === "Голубятников Леша") return "Голубятников Алексей";
+  return name;
+}

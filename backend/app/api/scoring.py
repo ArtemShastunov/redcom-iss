@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..deps import get_db, require_role
+from ..deps import get_current_user, get_db
 from ..models import (
     Evaluation,
     Operator,
@@ -71,7 +71,7 @@ class PeriodScoringOut(BaseModel):
 def get_period_scoring(
     period_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(require_role(UserRole.SUPERVISOR, UserRole.HEAD, UserRole.ADMIN)),
+    _: User = Depends(get_current_user),  # ТЕПЕРЬ ДОСТУПНО ВСЕМ АВТОРИЗОВАННЫМ
 ) -> PeriodScoringOut:
     period = db.get(Period, period_id)
     if period is None:

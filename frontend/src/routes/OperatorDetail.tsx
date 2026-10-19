@@ -13,7 +13,7 @@ import { fetchOperator } from "../api/operators";
 import { listPeriods, type Period } from "../api/periods";
 import { fetchPeriodScoring } from "../api/scoring";
 import { useMe } from "../lib/useMe";
-import { periodLabel } from "../lib/format";
+import { periodLabel, formatOperatorName } from "../lib/format";
 import EvaluationDetailsModal from "../components/EvaluationDetailsModal";
 import ScoreCell from "../components/ScoreCell";
 import StatusBadge from "../components/StatusBadge";
@@ -148,7 +148,7 @@ export default function OperatorDetail() {
 
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-semibold">{operator.data.full_name}</h1>
+          <h1 className="text-2xl font-semibold">{formatOperatorName(operator.data.full_name)}</h1>
           <StatusBadge status={period.status} />
         </div>
         {canCreate && (
