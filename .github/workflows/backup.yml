@@ -9,11 +9,6 @@ jobs:
   backup:
     runs-on: ubuntu-latest
 
-    # Вот здесь мы задаем переменные окружения для всего Job'а
-    env:
-      AWS_ENDPOINT_URL: https://${{ secrets.S3_ENDPOINT }}
-      AWS_DEFAULT_REGION: ${{ secrets.S3_REGION }}
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -34,14 +29,11 @@ jobs:
 
           echo "BACKUP_FILE=$FILENAME" >> $GITHUB_ENV
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.S3_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.S3_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.S3_REGION }}
-          # Параметр aws-endpoint-url убран, так как он не поддерживается
-
       - name: Upload backup file to Backblaze
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.S3_REGION }}
+          AWS_ENDPOINT_URL: https://${{ secrets.S3_ENDPOINT }}
         run: |
           aws s3 cp ${{ env.BACKUP_FILE }} s3://${{ secrets.S3_BUCKET_NAME }}/${{ env.BACKUP_FILE }}
