@@ -10,7 +10,8 @@ export default function CallsCell({
 }) {
   const [coords, setCoords] = useState<{ x: number; y: number } | null>(null);
 
-  if (!per) {
+  // Показываем тултип только если есть запись И значение больше нуля
+  if (!per || value <= 0) {
     return <span className="text-slate-600">{value}</span>;
   }
 
