@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { fetchPeriodScoring, type OperatorScore } from "../api/scoring";
+import { downloadMyEvaluations } from "../api/export";
 import { periodLabel, formatOperatorName } from "../lib/format";
 import ScoreCell from "./ScoreCell";
 import StatusBadge from "./StatusBadge";
@@ -13,36 +15,55 @@ export default function OperatorPeriodView({
   periodId: number;
   period: { year: number; month: number; status: "open" | "closed" };
 }) {
+  const [exporting, setExporting] = useState(false);
+
   const scoring = useQuery({
     queryKey: ["scoring", periodId],
     queryFn: () => fetchPeriodScoring(periodId),
   });
 
-  if (scoring.isLoading) return <div className="text-slate-500">Загрузка…</div>;
-  
-  if (scoring.isError) {
-    return (
-      <div className="text-red-600 bg-red-50 p-4 rounded border border-red-200">
-        Ошибка загрузки данных. Причина: {String(scoring.error)}
-      </div>
-    );
+  async function handleExport() {
+    setExporting(true);
+    try {
+      await downloadMyEvaluations(
+        periodId,
+        `Мои оценки_${periodLabel(period.year, period.month)}.xlsx`,
+      );
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Не удалось скачать файл");
+    } finally {
+      setExporting(false);
+    }
   }
-  
-  if (!scoring.data) return <div className="text-slate-500">Нет данных</div>;
+
+  if (scoring.isLoading) return <div className="text-slate-500">Загрузка…</div>;
+  if (!scoring.data) return <div className="text-slate-500">Ошибка загрузки</div>;
 
   return (
     <div className="space-y-4">
       <div>
-        <Link to="/periods" className="text-sm text-slate-500 hover:text-slate-900">
+        <Link
+          to="/periods"
+          className="text-sm text-slate-500 hover:text-slate-900"
+        >
           ← Все периоды
         </Link>
       </div>
 
-      <div className="flex items-center gap-3">
-        <h1 className="text-2xl font-semibold">
-          {periodLabel(period.year, period.month)}
-        </h1>
-        <StatusBadge status={period.status} />
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-semibold">
+            {periodLabel(period.year, period.month)}
+          </h1>
+          <StatusBadge status={period.status} />
+        </div>
+        <button
+          onClick={handleExport}
+          disabled={exporting}
+          className="rounded border px-3 py-1.5 text-sm hover:bg-slate-50 disabled:opacity-50"
+        >
+          {exporting ? "Скачивание…" : "Скачать мои оценки в Excel"}
+        </button>
       </div>
 
       <div className="bg-white border rounded overflow-hidden">
@@ -82,7 +103,10 @@ export default function OperatorPeriodView({
                   <ScoreCell value={op.tone_score} auto={op.auto_tone} />
                 </td>
                 <td className="px-3 py-2 text-center">
-                  <ScoreCell value={op.completeness_score} auto={op.auto_completeness} />
+                  <ScoreCell
+                    value={op.completeness_score}
+                    auto={op.auto_completeness}
+                  />
                 </td>
                 <td className="px-3 py-2 text-center">
                   <ScoreCell value={op.dialog_score} auto={op.auto_dialog} />

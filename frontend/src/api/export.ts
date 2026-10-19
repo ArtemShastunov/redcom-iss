@@ -7,7 +7,14 @@ export async function downloadPeriodXlsx(
     credentials: "include",
   });
   if (!res.ok) {
-    throw new Error(`Экспорт не удался: ${res.status}`);
+    let msg = `Экспорт не удался: ${res.status}`;
+    try {
+      const j = await res.json();
+      if (j?.detail) msg = j.detail;
+    } catch {
+      // ignore
+    }
+    throw new Error(msg);
   }
   const blob = await res.blob();
   triggerDownload(blob, filename);

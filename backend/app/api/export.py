@@ -16,9 +16,18 @@ from ..models import Evaluation, Period, User, UserRole
 router = APIRouter(prefix="/api/periods", tags=["export"])
 
 MONTHS_RU = {
-    1: "Январь", 2: "Февраль", 3: "Март", 4: "Апрель",
-    5: "Май", 6: "Июнь", 7: "Июль", 8: "Август",
-    9: "Сентябрь", 10: "Октябрь", 11: "Ноябрь", 12: "Декабрь",
+    1: "Январь",
+    2: "Февраль",
+    3: "Март",
+    4: "Апрель",
+    5: "Май",
+    6: "Июнь",
+    7: "Июль",
+    8: "Август",
+    9: "Сентябрь",
+    10: "Октябрь",
+    11: "Ноябрь",
+    12: "Декабрь",
 }
 
 XLSX_MEDIA = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -30,8 +39,8 @@ def export_period_xlsx(
     db: Session = Depends(get_db),
     _: User = Depends(require_role(UserRole.SUPERVISOR, UserRole.HEAD, UserRole.ADMIN)),
 ) -> Response:
-    """Полная ведомость за период: оценки, статистика, премии.
-    Доступна супервайзеру, начальнику ИСС и админу. Оператору — нет.
+    """ПОЛНЫЙ экспорт за период (оценки всех операторов, статистика).
+    Доступен только супервайзерам, начальнику ИСС и админу.
     """
     period = db.scalar(select(Period).where(Period.id == period_id))
     if period is None:
@@ -56,12 +65,9 @@ def export_my_evaluations(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> Response:
-    """Экспорт в Excel ТОЛЬКО своих оценок за период.
-
-    Доступно любому залогиненному пользователю, у которого аккаунт
-    привязан к оператору (operator_id != NULL). Это основной сценарий
-    для роли operator. Супервайзеры/head/admin обычно используют полный
-    /export.
+    """ЛИЧНЫЙ экспорт для оператора. Выгружает СТРОГО его оценки
+    за период. Если у пользователя нет operator_id (например, он админ
+    или начальник) — вернёт 400.
     """
     period = db.get(Period, period_id)
     if period is None:
@@ -70,28 +76,37 @@ def export_my_evaluations(
     if user.operator_id is None:
         raise HTTPException(
             400,
-            "У вашего аккаунта нет привязанного оператора. "
-            "Обратитесь к администратору.",
+            "У вашего аккаунта нет привязанного оператора. Обратитесь к администратору.",
         )
 
-    evals = list(db.scalars(
-        select(Evaluation)
-        .options(joinedload(Evaluation.supervisor))
-        .where(
-            Evaluation.period_id == period_id,
-            Evaluation.operator_id == user.operator_id,
+    evals = list(
+        db.scalars(
+            select(Evaluation)
+            .options(joinedload(Evaluation.supervisor))
+            .where(
+                Evaluation.period_id == period_id,
+                Evaluation.operator_id == user.operator_id,
+            )
+            .order_by(Evaluation.call_date, Evaluation.id)
         )
-        .order_by(Evaluation.call_date, Evaluation.id)
-    ))
+    )
 
     wb = Workbook()
     ws = wb.active
     ws.title = "Мои оценки"
 
     headers = [
-        "Дата", "Телефон", "Договор", "Вопрос",
-        "Тон", "Полнота", "1С",
-        "Что было", "Как надо было", "На что повлияло", "Комментарий",
+        "Дата",
+        "Телефон",
+        "Договор",
+        "Вопрос",
+        "Тон",
+        "Полнота",
+        "1С",
+        "Что было",
+        "Как надо было",
+        "На что повлияло",
+        "Комментарий",
         "Супервайзер",
     ]
     for col, h in enumerate(headers, start=1):
