@@ -71,7 +71,7 @@ class PeriodScoringOut(BaseModel):
 def get_period_scoring(
     period_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),  # ТЕПЕРЬ ДОСТУПНО ВСЕМ АВТОРИЗОВАННЫМ
+    _: User = Depends(get_current_user),  # Доступно всем авторизованным
 ) -> PeriodScoringOut:
     period = db.get(Period, period_id)
     if period is None:
@@ -106,10 +106,13 @@ def get_period_scoring(
         evs = by_operator.get(op.id, [])
         op_period = op_periods.get(op.id)
 
+        # ТЕПЕРЬ ЗВОНКИ И ОЦЕНКИ СТРОГО РАЗДЕЛЕНЫ.
+        # Если OperatorPeriod есть, берем calls_handled оттуда. Если нет - 0.
+        # Оценки (len(evs)) больше НЕ ДОБАВЛЯЮТСЯ к звонкам.
         if op_period is not None:
             calls = op_period.calls_handled
         else:
-            calls = len(evs)
+            calls = 0
 
         summaries.append(
             score_operator(

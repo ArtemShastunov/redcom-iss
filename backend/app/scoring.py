@@ -13,7 +13,6 @@ from .models import OperatorPeriod
 
 def derive_tone(scores: list[int]) -> int:
     c = Counter(scores)
-    # 3 и более минусов = -1, 3 и более плюсов = +1, иначе 0
     if c.get(-1, 0) >= 3:
         return -1
     if c.get(1, 0) >= 3:
@@ -23,7 +22,6 @@ def derive_tone(scores: list[int]) -> int:
 
 def derive_completeness(scores: list[int]) -> int:
     c = Counter(scores)
-    # 3 и более минусов = -1, 3 и более плюсов = +1, иначе 0
     if c.get(-1, 0) >= 3:
         return -1
     if c.get(1, 0) >= 3:
@@ -32,14 +30,13 @@ def derive_completeness(scores: list[int]) -> int:
 
 
 def derive_dialog(scores: list[int]) -> int:
-    # Всегда +1 по просьбе руководителя (супервайзеры заполняют правильно)
+    # Всегда +1
     return 1
 
 
 def derive_summary(*derived: int) -> int:
     if not derived:
         raise ValueError("derive_summary requires at least one score")
-    # Округление вниз (floor) для среднего
     return sum(derived) // len(derived)
 
 
@@ -52,7 +49,6 @@ def _effective(derived: int, override: int | None) -> int:
 
 # ---------- премия ----------
 
-# позиция (1..6) → {сводная оценка: премия}
 OPERATOR_PREMIUM: dict[int, dict[int, int]] = {
     1: {0: 2500, 1: 5000},
     2: {0: 2500, 1: 5000},
@@ -109,7 +105,7 @@ class SupervisorEvaluationSummary:
     premium: int = 0
 
 
-# ---------- агрегация для оператора ----------
+# ---------- агрегация ----------
 
 
 def score_operator(
@@ -158,9 +154,6 @@ def score_operator(
     )
 
 
-# ---------- рейтинг и премии операторов ----------
-
-
 def rank_and_award_operators(
     items: list[OperatorEvaluationSummary],
 ) -> list[OperatorEvaluationSummary]:
@@ -183,6 +176,12 @@ def rank_and_award_operators(
             i.premium = 0
             i.excluded_reason = "Сводная оценка Плохо"
             ineligible.append(i)
+        elif i.calls_handled <= 0:
+            # НОВОЕ УСЛОВИЕ: если нет данных по звонкам (файл еще не загружен)
+            i.rank = None
+            i.premium = 0
+            i.excluded_reason = "Нет данных по звонкам (ждем файл)"
+            ineligible.append(i)
         else:
             eligible.append(i)
 
@@ -200,9 +199,6 @@ def rank_and_award_operators(
         item.premium = OPERATOR_PREMIUM[rank].get(item.summary_score, 0)
 
     return eligible + ineligible
-
-
-# ---------- премия супервайзера ----------
 
 
 def award_supervisor(norm_score: int | None) -> int:
