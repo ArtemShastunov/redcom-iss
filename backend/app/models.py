@@ -4,8 +4,15 @@ import enum
 from datetime import datetime
 
 from sqlalchemy import (
-    Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text,
-    UniqueConstraint, func,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -64,6 +71,9 @@ class Operator(Base):
     full_name: Mapped[str] = mapped_column(String(200), unique=True)
     premium_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_supervisor: Mapped[bool] = mapped_column(
+        Boolean, default=False
+    )  # <-- НОВОЕ ПОЛЕ
 
 
 class Period(Base):
@@ -82,7 +92,9 @@ class Evaluation(Base):
     __tablename__ = "evaluations"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    period_id: Mapped[int] = mapped_column(ForeignKey("periods.id", ondelete="CASCADE"), index=True)
+    period_id: Mapped[int] = mapped_column(
+        ForeignKey("periods.id", ondelete="CASCADE"), index=True
+    )
     operator_id: Mapped[int] = mapped_column(ForeignKey("operators.id"), index=True)
     supervisor_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
 
@@ -152,9 +164,7 @@ class SupervisorPeriod(Base):
     period_id: Mapped[int] = mapped_column(
         ForeignKey("periods.id", ondelete="CASCADE"), primary_key=True
     )
-    supervisor_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id"), primary_key=True
-    )
+    supervisor_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
     norm_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     supervisor: Mapped[User] = relationship()
@@ -162,7 +172,9 @@ class SupervisorPeriod(Base):
 
 class DebtorPeriod(Base):
     __tablename__ = "debtor_periods"
-    __table_args__ = (UniqueConstraint("year", "month", name="uq_debtor_periods_year_month"),)
+    __table_args__ = (
+        UniqueConstraint("year", "month", name="uq_debtor_periods_year_month"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     year: Mapped[int] = mapped_column(Integer)

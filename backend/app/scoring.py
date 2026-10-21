@@ -8,9 +8,6 @@ from dataclasses import dataclass
 from .models import OperatorPeriod
 
 
-# ---------- производные оценки (НОВЫЕ ПРАВИЛА) ----------
-
-
 def derive_tone(scores: list[int]) -> int:
     c = Counter(scores)
     if c.get(-1, 0) >= 3:
@@ -30,7 +27,6 @@ def derive_completeness(scores: list[int]) -> int:
 
 
 def derive_dialog(scores: list[int]) -> int:
-    # Всегда +1
     return 1
 
 
@@ -40,14 +36,9 @@ def derive_summary(*derived: int) -> int:
     return sum(derived) // len(derived)
 
 
-# ---------- override ----------
-
-
 def _effective(derived: int, override: int | None) -> int:
     return override if override is not None else derived
 
-
-# ---------- премия ----------
 
 OPERATOR_PREMIUM: dict[int, dict[int, int]] = {
     1: {0: 2500, 1: 5000},
@@ -64,9 +55,6 @@ RANK_GROUP_SIZE = 2
 MAX_RANK = 3
 
 
-# ---------- структуры ----------
-
-
 @dataclass
 class OperatorEvaluationSummary:
     operator_id: int
@@ -75,16 +63,17 @@ class OperatorEvaluationSummary:
     has_critical_errors: bool
     critical_errors_reason: str | None
     evaluations_count: int
+    is_supervisor: bool = False  # <-- НОВОЕ ПОЛЕ
 
-    auto_tone: int
-    auto_completeness: int
-    auto_dialog: int
+    auto_tone: int = 0
+    auto_completeness: int = 0
+    auto_dialog: int = 0
 
-    tone_score: int
-    completeness_score: int
-    dialog_score: int
+    tone_score: int = 0
+    completeness_score: int = 0
+    dialog_score: int = 0
 
-    summary_score: int
+    summary_score: int = 0
 
     override_tone: int | None = None
     override_completeness: int | None = None
@@ -105,9 +94,6 @@ class SupervisorEvaluationSummary:
     premium: int = 0
 
 
-# ---------- агрегация ----------
-
-
 def score_operator(
     operator_id: int,
     operator_name: str,
@@ -118,6 +104,7 @@ def score_operator(
     has_critical_errors: bool,
     critical_errors_reason: str | None,
     op_period: OperatorPeriod | None = None,
+    is_supervisor: bool = False,  # <-- НОВЫЙ АРГУМЕНТ
 ) -> OperatorEvaluationSummary:
     auto_tone = derive_tone(tone_scores)
     auto_comp = derive_completeness(completeness_scores)
@@ -140,6 +127,7 @@ def score_operator(
         has_critical_errors=has_critical_errors,
         critical_errors_reason=critical_errors_reason,
         evaluations_count=len(tone_scores),
+        is_supervisor=is_supervisor,
         auto_tone=auto_tone,
         auto_completeness=auto_comp,
         auto_dialog=auto_dialog,
@@ -161,7 +149,12 @@ def rank_and_award_operators(
     ineligible: list[OperatorEvaluationSummary] = []
 
     for i in items:
-        if i.has_critical_errors:
+        if i.is_supervisor:
+            i.rank = None
+            i.premium = 0
+            i.excluded_reason = "Супервайзер"
+            ineligible.append(i)
+        elif i.has_critical_errors:
             i.rank = None
             i.premium = 0
             i.excluded_reason = "Критические ошибки"
@@ -177,10 +170,9 @@ def rank_and_award_operators(
             i.excluded_reason = "Сводная оценка Плохо"
             ineligible.append(i)
         elif i.calls_handled <= 0:
-            # НОВОЕ УСЛОВИЕ: если нет данных по звонкам (файл еще не загружен)
             i.rank = None
             i.premium = 0
-            i.excluded_reason = "Нет данных по звонкам (ждем файл)"
+            i.excluded_reason = "Нет данных по звонкам"
             ineligible.append(i)
         else:
             eligible.append(i)

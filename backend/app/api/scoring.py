@@ -32,6 +32,7 @@ class OperatorScoreOut(BaseModel):
     has_critical_errors: bool
     critical_errors_reason: str | None
     evaluations_count: int
+    is_supervisor: bool = False
 
     auto_tone: int
     auto_completeness: int
@@ -71,7 +72,7 @@ class PeriodScoringOut(BaseModel):
 def get_period_scoring(
     period_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),  # Доступно всем авторизованным
+    _: User = Depends(get_current_user),
 ) -> PeriodScoringOut:
     period = db.get(Period, period_id)
     if period is None:
@@ -106,9 +107,6 @@ def get_period_scoring(
         evs = by_operator.get(op.id, [])
         op_period = op_periods.get(op.id)
 
-        # ТЕПЕРЬ ЗВОНКИ И ОЦЕНКИ СТРОГО РАЗДЕЛЕНЫ.
-        # Если OperatorPeriod есть, берем calls_handled оттуда. Если нет - 0.
-        # Оценки (len(evs)) больше НЕ ДОБАВЛЯЮТСЯ к звонкам.
         if op_period is not None:
             calls = op_period.calls_handled
         else:
@@ -129,6 +127,7 @@ def get_period_scoring(
                 if op_period
                 else None,
                 op_period=op_period,
+                is_supervisor=op.is_supervisor,  # Передаем флаг
             )
         )
 
@@ -176,6 +175,7 @@ def get_period_scoring(
                 has_critical_errors=o.has_critical_errors,
                 critical_errors_reason=o.critical_errors_reason,
                 evaluations_count=o.evaluations_count,
+                is_supervisor=o.is_supervisor,
                 auto_tone=o.auto_tone,
                 auto_completeness=o.auto_completeness,
                 auto_dialog=o.auto_dialog,

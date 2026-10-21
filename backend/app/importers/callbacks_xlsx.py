@@ -1,25 +1,3 @@
-"""Импорт файла «звонки_<месяц>.xlsx» — заказные (обратные) звонки.
-
-Формат файла:
-  * Лист_1 (первый) — детальный список всех звонков:
-      A: Дата звонка
-      B: Номер договора
-      C: Клиент
-      D: Контактный телефон
-      E: Причина звонка
-      F: Оператор      <- по этой колонке агрегируем
-      G: Комментарий
-  * Лист1 (второй) — готовая сводка (оператор + число звонков).
-    Игнорируем: считаем сами из детального списка — там точнее.
-
-Заказные звонки НЕ входят в рейтинг и премии. Они попадают в отдельное
-поле operator_periods.callback_calls и отображаются отдельной колонкой.
-
-Матчинг оператора: сначала по premium_name (ФИО в формате файла премий),
-затем по фамилии, если она однозначна в БД.
-
-Идемпотентен: повторный запуск перезаписывает значение за период.
-"""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -30,49 +8,40 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..models import Operator, OperatorPeriod, Period, PeriodStatus
-from .premiums_xlsx import _build_indexes, _find_operator, _parse_fio
+from .premiums_xlsx import _build_indexes, _find_operator
 
 
 @dataclass
 class CallbacksImportReport:
     period_id: int
     rows_total: int = 0
-    matched: list[tuple[str, str, int]] = field(default_factory=list)  # (db_name, file_name, count)
-    not_matched: list[tuple[str, int]] = field(default_factory=list)   # (file_name, count)
+    matched: list[tuple[str, str, int]] = field(default_factory=list)
+    not_matched: list[tuple[str, int]] = field(default_factory=list)
     created: int = 0
     updated: int = 0
 
 
 def _parse_callbacks_file(path: Path) -> dict[str, int]:
-    """Возвращает {ФИО из файла: число звонков} по первому листу."""
     if path.suffix.lower() != ".xlsx":
-        raise ValueError(
-            f"Только .xlsx поддерживается (получено {path.suffix!r}). "
-            "Пересохрани файл в Excel как .xlsx."
-        )
+        raise ValueError(f"Только .xlsx поддерживается (получено {path.suffix!r})")
 
     wb = load_workbook(path, data_only=True, read_only=True)
-    # Берём первый лист — там детальный список
     ws = wb.worksheets[0]
 
     counts: dict[str, int] = {}
-    for row_idx in range(2, ws.max_row + 1):  # 1-я строка — шапка
-        operator_raw = ws.cell(row=row_idx, column=6).value  # колонка F
+    for row_idx in range(2, ws.max_row + 1):
+        operator_raw = ws.cell(row=row_idx, column=6).value  # F - оператор
         if operator_raw is None:
             continue
         name = str(operator_raw).strip()
         if not name:
             continue
         counts[name] = counts.get(name, 0) + 1
-
     return counts
 
 
 def import_callbacks_xlsx(
-    path: Path,
-    db: Session,
-    year: int,
-    month: int,
+    path: Path, db: Session, year: int, month: int
 ) -> CallbacksImportReport:
     period = db.scalar(select(Period).where(Period.year == year, Period.month == month))
     if period is None:
@@ -81,9 +50,15 @@ def import_callbacks_xlsx(
         db.flush()
 
     report = CallbacksImportReport(period_id=period.id)
-
     counts = _parse_callbacks_file(path)
     report.rows_total = sum(counts.values())
+
+    # ВАЖНО: Сбрасываем старые заказные звонки за этот период в 0
+    op_periods_all = list(
+        db.scalars(select(OperatorPeriod).where(OperatorPeriod.period_id == period.id))
+    )
+    for op in op_periods_all:
+        op.callback_calls = 0
 
     operators = list(db.scalars(select(Operator).order_by(Operator.id)))
     by_premium, by_surname = _build_indexes(operators)
