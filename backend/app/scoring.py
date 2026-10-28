@@ -28,10 +28,25 @@ def derive_completeness(scores: list[int]) -> int:
 
 def derive_dialog(scores: list[int]) -> int:
     c = Counter(scores)
-    if c.get(-1, 0) >= 3:
+
+    # Считаем количество плюсов и минусов
+    minuses = c.get(-1, 0)
+    pluses = c.get(1, 0)
+
+    # Твое условие: если минусов больше 6, всегда -1
+    if minuses > 6:
         return -1
-    if c.get(1, 0) >= 3:
+
+    # Если плюсов больше 6, всегда +1
+    if pluses > 6:
         return 1
+
+    # Стандартное правило из ТЗ (3 и более)
+    if minuses >= 3:
+        return -1
+    if pluses >= 3:
+        return 1
+
     return 0
 
 
