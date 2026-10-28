@@ -27,7 +27,12 @@ def derive_completeness(scores: list[int]) -> int:
 
 
 def derive_dialog(scores: list[int]) -> int:
-    return 1
+    c = Counter(scores)
+    if c.get(-1, 0) >= 3:
+        return -1
+    if c.get(1, 0) >= 3:
+        return 1
+    return 0
 
 
 def derive_summary(*derived: int) -> int:
