@@ -15,8 +15,8 @@ import Modal from "../components/Modal";
 
 function fmtMoney(v: number): string {
   return v.toLocaleString("ru-RU", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
   });
 }
 

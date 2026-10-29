@@ -1,3 +1,4 @@
+import math
 import tempfile
 from io import BytesIO
 from pathlib import Path
@@ -24,9 +25,18 @@ from ..schemas import (
 router = APIRouter(prefix="/api/debtor", tags=["debtor"])
 
 MONTHS_RU = {
-    1: "Январь", 2: "Февраль", 3: "Март", 4: "Апрель",
-    5: "Май", 6: "Июнь", 7: "Июль", 8: "Август",
-    9: "Сентябрь", 10: "Октябрь", 11: "Ноябрь", 12: "Декабрь",
+    1: "Январь",
+    2: "Февраль",
+    3: "Март",
+    4: "Апрель",
+    5: "Май",
+    6: "Июнь",
+    7: "Июль",
+    8: "Август",
+    9: "Сентябрь",
+    10: "Октябрь",
+    11: "Ноябрь",
+    12: "Декабрь",
 }
 
 XLSX_MEDIA = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -38,26 +48,30 @@ def _compute_row(rec: DebtorRecord) -> DebtorRowOut:
     total = prev + curr
     p5 = total * 0.05
     net = p5 * 0.87 * 1.6
+
+    # Округляем В БОЛЬШУЮ СТОРОНУ до целых (без копеек)
     return DebtorRowOut(
         name=rec.name,
         operator_id=rec.operator_id,
         operator_name=rec.operator.full_name if rec.operator else None,
         is_operator=rec.operator_id is not None,
-        previous_amount=round(prev, 2),
-        current_amount=round(curr, 2),
-        total=round(total, 2),
-        percent_5=round(p5, 2),
-        net_amount=round(net, 2),
+        previous_amount=float(math.ceil(prev)),
+        current_amount=float(math.ceil(curr)),
+        total=float(math.ceil(total)),
+        percent_5=float(math.ceil(p5)),
+        net_amount=float(math.ceil(net)),
     )
 
 
 def _build_report(db: Session, period: DebtorPeriod) -> DebtorReportOut:
-    records = list(db.scalars(
-        select(DebtorRecord)
-        .options(joinedload(DebtorRecord.operator))
-        .where(DebtorRecord.period_id == period.id)
-        .order_by(DebtorRecord.name)
-    ))
+    records = list(
+        db.scalars(
+            select(DebtorRecord)
+            .options(joinedload(DebtorRecord.operator))
+            .where(DebtorRecord.period_id == period.id)
+            .order_by(DebtorRecord.name)
+        )
+    )
     rows = [_compute_row(r) for r in records]
 
     return DebtorReportOut(
@@ -65,11 +79,11 @@ def _build_report(db: Session, period: DebtorPeriod) -> DebtorReportOut:
         year=period.year,
         month=period.month,
         rows=rows,
-        total_previous=round(sum(r.previous_amount for r in rows), 2),
-        total_current=round(sum(r.current_amount for r in rows), 2),
-        total_total=round(sum(r.total for r in rows), 2),
-        total_percent_5=round(sum(r.percent_5 for r in rows), 2),
-        total_net=round(sum(r.net_amount for r in rows), 2),
+        total_previous=float(sum(r.previous_amount for r in rows)),
+        total_current=float(sum(r.current_amount for r in rows)),
+        total_total=float(sum(r.total for r in rows)),
+        total_percent_5=float(sum(r.percent_5 for r in rows)),
+        total_net=float(sum(r.net_amount for r in rows)),
     )
 
 
@@ -78,9 +92,13 @@ def list_periods(
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
 ) -> list[DebtorPeriod]:
-    return list(db.scalars(
-        select(DebtorPeriod).order_by(DebtorPeriod.year.desc(), DebtorPeriod.month.desc())
-    ))
+    return list(
+        db.scalars(
+            select(DebtorPeriod).order_by(
+                DebtorPeriod.year.desc(), DebtorPeriod.month.desc()
+            )
+        )
+    )
 
 
 @router.get("/periods/{period_id}", response_model=DebtorReportOut)
@@ -169,8 +187,12 @@ def export_period(
     ws.title = "Премия"
 
     headers = [
-        "Оператор", "Остатки", MONTHS_RU.get(period.month, str(period.month)),
-        "Итого", "5%", "На руки",
+        "Оператор",
+        "Остатки",
+        MONTHS_RU.get(period.month, str(period.month)),
+        "Итого",
+        "5%",
+        "На руки",
     ]
     for col, h in enumerate(headers, start=1):
         c = ws.cell(row=1, column=col, value=h)
@@ -190,7 +212,9 @@ def export_period(
     ws.cell(row=total_row, column=2, value=report.total_previous).font = Font(bold=True)
     ws.cell(row=total_row, column=3, value=report.total_current).font = Font(bold=True)
     ws.cell(row=total_row, column=4, value=report.total_total).font = Font(bold=True)
-    ws.cell(row=total_row, column=5, value=report.total_percent_5).font = Font(bold=True)
+    ws.cell(row=total_row, column=5, value=report.total_percent_5).font = Font(
+        bold=True
+    )
     ws.cell(row=total_row, column=6, value=report.total_net).font = Font(bold=True)
 
     for i, w in enumerate([28, 16, 16, 16, 16, 16], start=1):
