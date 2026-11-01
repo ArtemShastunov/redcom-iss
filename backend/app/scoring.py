@@ -27,21 +27,18 @@ def derive_completeness(scores: list[int]) -> int:
 
 
 def derive_dialog(scores: list[int]) -> int:
+    # ВОЗВРАЩЕНО КАК БЫЛО (по твоему требованию)
     c = Counter(scores)
 
-    # Считаем количество плюсов и минусов
     minuses = c.get(-1, 0)
     pluses = c.get(1, 0)
 
-    # Твое условие: если минусов больше 6, всегда -1
     if minuses > 6:
         return -1
 
-    # Если плюсов больше 6, всегда +1
     if pluses > 6:
         return 1
 
-    # Стандартное правило из ТЗ (3 и более)
     if minuses >= 3:
         return -1
     if pluses >= 3:
@@ -60,13 +57,11 @@ def _effective(derived: int, override: int | None) -> int:
     return override if override is not None else derived
 
 
+# ИСПРАВЛЕНО: всего 3 ключа, так как места группируются по 2 человека
 OPERATOR_PREMIUM: dict[int, dict[int, int]] = {
-    1: {0: 2500, 1: 5000},
-    2: {0: 2500, 1: 5000},
-    3: {0: 2000, 1: 4000},
-    4: {0: 2000, 1: 4000},
-    5: {0: 1500, 1: 3000},
-    6: {0: 1500, 1: 3000},
+    1: {0: 2500, 1: 5000},  # 1 и 2 место в рейтинге (поз. 1-2)
+    2: {0: 2000, 1: 4000},  # 3 и 4 место в рейтинге (поз. 3-4)
+    3: {0: 1500, 1: 3000},  # 5 и 6 место в рейтинге (поз. 5-6)
 }
 
 SUPERVISOR_PREMIUM: dict[int, int] = {0: 3000, 1: 6000}
@@ -83,7 +78,7 @@ class OperatorEvaluationSummary:
     has_critical_errors: bool
     critical_errors_reason: str | None
     evaluations_count: int
-    is_supervisor: bool = False  # <-- НОВОЕ ПОЛЕ
+    is_supervisor: bool = False
 
     auto_tone: int = 0
     auto_completeness: int = 0
@@ -124,7 +119,7 @@ def score_operator(
     has_critical_errors: bool,
     critical_errors_reason: str | None,
     op_period: OperatorPeriod | None = None,
-    is_supervisor: bool = False,  # <-- НОВЫЙ АРГУМЕНТ
+    is_supervisor: bool = False,
 ) -> OperatorEvaluationSummary:
     auto_tone = derive_tone(tone_scores)
     auto_comp = derive_completeness(completeness_scores)
@@ -206,8 +201,12 @@ def rank_and_award_operators(
             item.premium = 0
             item.excluded_reason = "Вне топ-6"
             continue
+
+        # Распределяет места: 1, 1, 2, 2, 3, 3
         rank = (pos - 1) // RANK_GROUP_SIZE + 1
         item.rank = rank
+
+        # Берет премию из исправленного словаря (1, 2 или 3)
         item.premium = OPERATOR_PREMIUM[rank].get(item.summary_score, 0)
 
     return eligible + ineligible
