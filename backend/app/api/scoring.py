@@ -28,6 +28,10 @@ class OperatorScoreOut(BaseModel):
     operator_id: int
     operator_name: str
     calls_handled: int
+    calls_incoming: int
+    calls_outgoing: int
+    chats_bitrix: int
+    chats_mobile: int
     callback_calls: int
     has_critical_errors: bool
     critical_errors_reason: str | None
@@ -127,7 +131,7 @@ def get_period_scoring(
                 if op_period
                 else None,
                 op_period=op_period,
-                is_supervisor=op.is_supervisor,  # Передаем флаг
+                is_supervisor=op.is_supervisor,
             )
         )
 
@@ -167,6 +171,26 @@ def get_period_scoring(
                 operator_id=o.operator_id,
                 operator_name=o.operator_name,
                 calls_handled=o.calls_handled,
+                calls_incoming=(
+                    op_periods[o.operator_id].calls_incoming
+                    if o.operator_id in op_periods
+                    else 0
+                ),
+                calls_outgoing=(
+                    op_periods[o.operator_id].calls_outgoing
+                    if o.operator_id in op_periods
+                    else 0
+                ),
+                chats_bitrix=(
+                    op_periods[o.operator_id].chats_bitrix
+                    if o.operator_id in op_periods
+                    else 0
+                ),
+                chats_mobile=(
+                    op_periods[o.operator_id].chats_mobile
+                    if o.operator_id in op_periods
+                    else 0
+                ),
                 callback_calls=(
                     op_periods.get(o.operator_id).callback_calls
                     if op_periods.get(o.operator_id)

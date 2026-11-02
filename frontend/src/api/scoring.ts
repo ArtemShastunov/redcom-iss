@@ -4,6 +4,10 @@ export interface OperatorScore {
   operator_id: number;
   operator_name: string;
   calls_handled: number;
+  calls_incoming: number;
+  calls_outgoing: number;
+  chats_bitrix: number;
+  chats_mobile: number;
   callback_calls: number;
   has_critical_errors: boolean;
   critical_errors_reason: string | null;

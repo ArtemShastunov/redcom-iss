@@ -1,12 +1,18 @@
 import { useState } from "react";
-import { OperatorPeriod } from "../api/operatorPeriods";
+
+export interface CallsBreakdown {
+  calls_incoming: number;
+  calls_outgoing: number;
+  chats_bitrix: number;
+  chats_mobile: number;
+}
 
 export default function CallsCell({
   value,
   per,
 }: {
   value: number;
-  per: OperatorPeriod | null;
+  per: CallsBreakdown | null;
 }) {
   const [coords, setCoords] = useState<{ x: number; y: number } | null>(null);
 

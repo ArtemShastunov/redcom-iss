@@ -94,7 +94,7 @@ export default function OperatorPeriodView({
                   </Link>
                 </td>
                 <td className="px-3 py-2 text-right text-slate-600">
-                  <CallsCell value={op.calls_handled} per={null} />
+                  <CallsCell value={op.calls_handled} per={op} />
                 </td>
                 <td className="px-3 py-2 text-right text-slate-600">
                   {op.evaluations_count}
