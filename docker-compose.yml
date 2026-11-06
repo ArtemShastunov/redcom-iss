@@ -3,46 +3,53 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: redkom
-      POSTGRES_PASSWORD: redkom
-      POSTGRES_DB: redkom_iss
-    ports:
-      - "5432:5432"
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U redkom -d redkom_iss"]
-      interval: 3s
-      timeout: 3s
-      retries: 20
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - internal
 
-  api:
-    build: ./backend
+  backend:
+    build:
+      context: ./backend
     restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql+psycopg://redkom:redkom@db:5432/redkom_iss
-      SECRET_KEY: dev-secret-change-me
-      COOKIE_SECURE: "false"
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      SECRET_KEY: ${SECRET_KEY}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
     ports:
       - "8088:8000"
-    volumes:
-      - ./backend:/app
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    # Убираем проброс volume ./backend:/app для production,
+    # чтобы код не перезаписывался на лету. Для dev можно сделать compose.override.yml
+    networks:
+      - internal
+      - external
 
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
     restart: unless-stopped
     depends_on:
-      - api
+      - backend
     ports:
-      - "5173:5173"
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-    command: npm run dev
+      - "5173:80" # В production фронтенд лучше отдавать через Nginx, а не dev-сервер Vite!
+    networks:
+      - external
 
 volumes:
   pgdata:
+
+networks:
+  internal:
+    internal: true
+  external:
