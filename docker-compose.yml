@@ -27,8 +27,9 @@ services:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       SECRET_KEY: ${SECRET_KEY}
       COOKIE_SECURE: ${COOKIE_SECURE:-true}
-    ports:
-      - "8088:8000"
+    # Убираем публикацию портов, общение frontend  backend внутри докера
+    #ports:
+    #  - "8088:8000"
     # Убираем проброс volume ./backend:/app для production,
     # чтобы код не перезаписывался на лету. Для dev можно сделать compose.override.yml
     networks:
