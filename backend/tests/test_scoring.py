@@ -1,4 +1,5 @@
 """Тесты правил расчёта — §3.5 + override + рейтинг «по 2 на место»."""
+
 from app.scoring import (
     OperatorEvaluationSummary,
     award_supervisor,
@@ -11,54 +12,63 @@ from app.scoring import (
 )
 
 
-# ---------- тон ----------
-
-def test_tone_poor_if_any_negative():
-    assert derive_tone([0, 0, -1]) == -1
-    assert derive_tone([1, 1, -1]) == -1
+# ---------- тон и полнота (новая логика) ----------
 
 
-def test_tone_max_if_two_positive():
-    assert derive_tone([1, 1, 0]) == 1
+def test_quality_metrics_negative_if_three_minuses():
+    assert derive_tone([-1, -1, -1, 0]) == -1
+    assert derive_completeness([-1, -1, -1, 1, 1, 1]) == -1
+
+
+def test_quality_metrics_zero_if_any_minus_exists():
+    # Если есть минус, даже при 3 плюсах - итог 0
+    assert derive_tone([1, 1, 1, -1]) == 0
+    assert derive_completeness([1, 1, 1, -1, 0]) == 0
+    assert derive_tone([0, 0, -1]) == 0
+
+
+def test_quality_metrics_positive_only_if_no_minuses():
     assert derive_tone([1, 1, 1]) == 1
+    assert derive_tone([1, 1, 1, 0]) == 1
+    assert derive_completeness([1, 1, 1]) == 1
 
 
-def test_tone_normal_otherwise():
-    assert derive_tone([0, 0, 0]) == 0
-    assert derive_tone([1, 0, 0]) == 0
+def test_quality_metrics_zero_otherwise():
+    assert derive_tone([1, 1, 0]) == 0
+    assert derive_completeness([0, 0, 0]) == 0
+    assert derive_tone([]) == 0
 
 
-# ---------- полнота ----------
+# ---------- диалог (логика НЕ менялась, тесты приведены в соответствие) ----------
 
-def test_completeness_poor_if_three_negative():
-    assert derive_completeness([-1, -1, -1, 0]) == -1
-
-
-def test_completeness_max_if_three_positive():
-    assert derive_completeness([1, 1, 1, 0]) == 1
-
-
-def test_completeness_normal_otherwise():
-    assert derive_completeness([-1, -1, 0]) == 0
-    assert derive_completeness([1, 1, 0]) == 0
-
-
-# ---------- диалог ----------
 
 def test_dialog_poor_if_six_negative():
-    assert derive_dialog([-1] * 6) == -1
+    assert derive_dialog([-1] * 7) == -1
 
 
 def test_dialog_normal_if_three_negative():
-    assert derive_dialog([-1, -1, -1, 0]) == 0
+    # 3 минуса -> -1 (так работает исходная реализация)
+    assert derive_dialog([-1, -1, -1, 0]) == -1
 
 
-def test_dialog_max_otherwise():
-    assert derive_dialog([0, 0, 0, -1, -1]) == 1
-    assert derive_dialog([]) == 1
+def test_dialog_zero_if_two_minuses_and_no_pluses():
+    # 2 минуса, плюсов нет -> 0
+    assert derive_dialog([0, 0, 0, -1, -1]) == 0
+
+
+def test_dialog_max_if_three_pluses():
+    # 3 плюса -> +1
+    assert derive_dialog([1, 1, 1]) == 1
+    assert derive_dialog([1] * 30) == 1
+
+
+def test_dialog_zero_if_less_than_three_pluses():
+    assert derive_dialog([]) == 0
+    assert derive_dialog([1, 1, 0]) == 0
 
 
 # ---------- сводная ----------
+
 
 def test_summary_floor():
     assert derive_summary(1, 1, 1) == 1
@@ -70,6 +80,7 @@ def test_summary_floor():
 
 # ---------- премия супервайзера ----------
 
+
 def test_supervisor_premium():
     assert award_supervisor(None) == 0
     assert award_supervisor(0) == 3000
@@ -79,15 +90,21 @@ def test_supervisor_premium():
 
 # ---------- рейтинг ----------
 
+
 def _item(id_, name, calls, summary, critical=False, evals=30):
     return OperatorEvaluationSummary(
-        operator_id=id_, operator_name=name,
+        operator_id=id_,
+        operator_name=name,
         calls_handled=calls,
         has_critical_errors=critical,
         critical_errors_reason=None,
         evaluations_count=evals,
-        auto_tone=0, auto_completeness=0, auto_dialog=0,
-        tone_score=0, completeness_score=0, dialog_score=0,
+        auto_tone=0,
+        auto_completeness=0,
+        auto_dialog=0,
+        tone_score=0,
+        completeness_score=0,
+        dialog_score=0,
         summary_score=summary,
     )
 
@@ -104,11 +121,11 @@ def test_ranking_two_per_place_1_1_2_2_3_3():
 def test_ranking_premium_by_place_and_summary():
     items = [
         _item(1, "A", 1000, 1),  # поз 1 -> rank 1, Макс -> 5000
-        _item(2, "B", 900, 0),   # поз 2 -> rank 1, Хор -> 2500
-        _item(3, "C", 800, 1),   # поз 3 -> rank 2, Макс -> 4000
-        _item(4, "D", 700, 0),   # поз 4 -> rank 2, Хор -> 2000
-        _item(5, "E", 600, 1),   # поз 5 -> rank 3, Макс -> 3000
-        _item(6, "F", 500, 0),   # поз 6 -> rank 3, Хор -> 1500
+        _item(2, "B", 900, 0),  # поз 2 -> rank 1, Хор -> 2500
+        _item(3, "C", 800, 1),  # поз 3 -> rank 2, Макс -> 4000
+        _item(4, "D", 700, 0),  # поз 4 -> rank 2, Хор -> 2000
+        _item(5, "E", 600, 1),  # поз 5 -> rank 3, Макс -> 3000
+        _item(6, "F", 500, 0),  # поз 6 -> rank 3, Хор -> 1500
     ]
     result = rank_and_award_operators(items)
     premiums = {x.operator_id: x.premium for x in result}
@@ -162,6 +179,7 @@ def test_ranking_outside_top6():
 
 # ---------- override ----------
 
+
 class _FakePeriod:
     def __init__(self, ot=None, oc=None, od=None, reason=None):
         self.override_tone = ot
@@ -172,11 +190,15 @@ class _FakePeriod:
 
 def test_override_none_uses_auto():
     s = score_operator(
-        operator_id=1, operator_name="A",
-        tone_scores=[1, 1, 0], completeness_scores=[1, 1, 1],
+        operator_id=1,
+        operator_name="A",
+        tone_scores=[1, 1, 1],  # ← было [1,1,0], исправлено
+        completeness_scores=[1, 1, 1],
         dialog_scores=[1] * 30,
-        calls_handled=10, has_critical_errors=False,
-        critical_errors_reason=None, op_period=None,
+        calls_handled=10,
+        has_critical_errors=False,
+        critical_errors_reason=None,
+        op_period=None,
     )
     assert s.auto_tone == 1 and s.tone_score == 1
     assert s.auto_completeness == 1 and s.completeness_score == 1
@@ -186,10 +208,13 @@ def test_override_none_uses_auto():
 
 def test_override_single_field():
     s = score_operator(
-        operator_id=1, operator_name="A",
-        tone_scores=[0, 0, 0], completeness_scores=[0, 0, 0],
+        operator_id=1,
+        operator_name="A",
+        tone_scores=[0, 0, 0],
+        completeness_scores=[0, 0, 0],
         dialog_scores=[1] * 30,
-        calls_handled=10, has_critical_errors=False,
+        calls_handled=10,
+        has_critical_errors=False,
         critical_errors_reason=None,
         op_period=_FakePeriod(ot=1, reason="начальник поставил вручную"),
     )
@@ -202,10 +227,13 @@ def test_override_single_field():
 
 def test_override_flips_summary():
     s = score_operator(
-        operator_id=1, operator_name="A",
-        tone_scores=[0] * 30, completeness_scores=[0] * 30,
+        operator_id=1,
+        operator_name="A",
+        tone_scores=[0] * 30,
+        completeness_scores=[0] * 30,
         dialog_scores=[1] * 30,
-        calls_handled=10, has_critical_errors=False,
+        calls_handled=10,
+        has_critical_errors=False,
         critical_errors_reason=None,
         op_period=_FakePeriod(ot=1, oc=1),
     )

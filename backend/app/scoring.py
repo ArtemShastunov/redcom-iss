@@ -8,22 +8,33 @@ from dataclasses import dataclass
 from .models import OperatorPeriod
 
 
-def derive_tone(scores: list[int]) -> int:
+def _derive_quality_metric(scores: list[int]) -> int:
+    """
+    Единая логика для Тона и Полноты.
+    Если есть хоть один минус, положительная оценка невозможна.
+    """
     c = Counter(scores)
-    if c.get(-1, 0) >= 3:
+    minuses = c.get(-1, 0)
+    pluses = c.get(1, 0)
+
+    # Если 3 и более минусов - итог -1
+    if minuses >= 3:
         return -1
-    if c.get(1, 0) >= 3:
+
+    # Если 3 и более плюсов и НИ ОДНОГО минуса - итог +1
+    if pluses >= 3 and minuses == 0:
         return 1
+
+    # Во всех остальных случаях - 0
     return 0
+
+
+def derive_tone(scores: list[int]) -> int:
+    return _derive_quality_metric(scores)
 
 
 def derive_completeness(scores: list[int]) -> int:
-    c = Counter(scores)
-    if c.get(-1, 0) >= 3:
-        return -1
-    if c.get(1, 0) >= 3:
-        return 1
-    return 0
+    return _derive_quality_metric(scores)
 
 
 def derive_dialog(scores: list[int]) -> int:
