@@ -43,7 +43,7 @@ services:
     depends_on:
       - backend
     ports:
-      - "5173:80" # В production фронтенд лучше отдавать через Nginx, а не dev-сервер Vite!
+      - "8230:8080" # В production фронтенд лучше отдавать через Nginx, а не dev-сервер Vite!
     networks:
       - external
 
